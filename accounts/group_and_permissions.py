@@ -1,8 +1,8 @@
 from django.contrib.auth.models import Group
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-
+from .permissions import IsAdminUser
 from utils.response import success_response
 from .serializers import GroupSerializer
 
