@@ -3,7 +3,7 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models.signals import post_migrate
 from django.dispatch import receiver
 
-DEFAULT_GROUPS = ["Admin", "Sales", "Designer"]
+DEFAULT_GROUPS = ["SuperAdmin", "Sales", "Designer"]
 
 
 @receiver(post_migrate)

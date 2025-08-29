@@ -111,6 +111,9 @@ python manage.py migrate
 python manage.py seed_master_data
 ```
 
+```bash
+python manage.py seed_users
+```
 This will populate the initial reference/master data required by the system.
 
 ---
