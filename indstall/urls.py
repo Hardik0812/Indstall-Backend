@@ -17,10 +17,15 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import include, path
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
+ROUTE_PREFIX = os.getenv("ROUTE_PREFIX", "").strip("/")
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("rest-auth/", include("rest_framework.urls")),
-    path("", include("accounts.urls")),
-    path("", include("qrf.urls")),
+    path(f"{ROUTE_PREFIX}/accounts/", include("accounts.urls")),
+    path(f"{ROUTE_PREFIX}/qrf/", include("qrf.urls")),
+    path(f"{ROUTE_PREFIX}/qrf-master/", include("rfq_master.urls")),
 ]
