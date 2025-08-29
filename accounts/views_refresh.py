@@ -1,10 +1,11 @@
 # accounts/views_refresh.py
-from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework import status
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework.permissions import AllowAny
-from accounts.models import User
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.views import TokenRefreshView
+
+from accounts.models import User
 from utils.response import success_response
 
 
@@ -24,7 +25,8 @@ class TokenRefreshWithUserView(TokenRefreshView):
         user = authenticator.get_user(validated_token)
 
         response_payload = {
-            "tokens": tokens,  # access (and refresh if ROTATE_REFRESH_TOKENS=True)
+            # access (and refresh if ROTATE_REFRESH_TOKENS=True)
+            "tokens": tokens,
             "user": {
                 "id": user.id,
                 "email": getattr(user, "email", ""),

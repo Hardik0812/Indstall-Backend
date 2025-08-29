@@ -1,5 +1,16 @@
 from django.core.management.base import BaseCommand
-from rfq_master.models import (Region, FrameType, SteelGrade, SheetingType, InsulationType, OpeningType, VentType, CraneType)
+
+from rfq_master.models import (
+    CraneType,
+    FrameType,
+    InsulationType,
+    OpeningType,
+    Region,
+    SheetingType,
+    SteelGrade,
+    VentType,
+)
+
 
 class Command(BaseCommand):
     help = "Seed all master data lookup tables (Region, FrameType, SteelGrade, etc.)"
@@ -67,13 +78,21 @@ class Command(BaseCommand):
         }
 
         for model, items in datasets.items():
-            self.stdout.write(self.style.MIGRATE_HEADING(f"Seeding {model.__name__}..."))
+            self.stdout.write(
+                self.style.MIGRATE_HEADING(f"Seeding {model.__name__}...")
+            )
             created_count = 0
             for code, name in items:
-                obj, created = model.objects.get_or_create(code=code, defaults={"name": name})
+                obj, created = model.objects.get_or_create(
+                    code=code, defaults={"name": name}
+                )
                 if created:
                     created_count += 1
                     self.stdout.write(self.style.SUCCESS(f"  ✔ Added {name}"))
                 else:
                     self.stdout.write(self.style.WARNING(f"  • Already exists: {name}"))
-            self.stdout.write(self.style.NOTICE(f"Done. {created_count} new {model.__name__} added.\n"))
+            self.stdout.write(
+                self.style.NOTICE(
+                    f"Done. {created_count} new {model.__name__} added.\n"
+                )
+            )

@@ -1,6 +1,6 @@
-
 import secrets
 import string
+
 
 def generate_strong_password(length: int = 12) -> str:
     """

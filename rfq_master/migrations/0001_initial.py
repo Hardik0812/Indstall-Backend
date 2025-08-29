@@ -4,115 +4,177 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='CraneType',
+            name="CraneType",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=50, unique=True)),
-                ('name', models.CharField(max_length=100)),
-                ('is_active', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("code", models.CharField(max_length=50, unique=True)),
+                ("name", models.CharField(max_length=100)),
+                ("is_active", models.BooleanField(default=True)),
             ],
             options={
-                'ordering': ['name'],
-                'abstract': False,
+                "ordering": ["name"],
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='FrameType',
+            name="FrameType",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=50, unique=True)),
-                ('name', models.CharField(max_length=100)),
-                ('is_active', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("code", models.CharField(max_length=50, unique=True)),
+                ("name", models.CharField(max_length=100)),
+                ("is_active", models.BooleanField(default=True)),
             ],
             options={
-                'ordering': ['name'],
-                'abstract': False,
+                "ordering": ["name"],
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='InsulationType',
+            name="InsulationType",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=50, unique=True)),
-                ('name', models.CharField(max_length=100)),
-                ('is_active', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("code", models.CharField(max_length=50, unique=True)),
+                ("name", models.CharField(max_length=100)),
+                ("is_active", models.BooleanField(default=True)),
             ],
             options={
-                'ordering': ['name'],
-                'abstract': False,
+                "ordering": ["name"],
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='OpeningType',
+            name="OpeningType",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=50, unique=True)),
-                ('name', models.CharField(max_length=100)),
-                ('is_active', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("code", models.CharField(max_length=50, unique=True)),
+                ("name", models.CharField(max_length=100)),
+                ("is_active", models.BooleanField(default=True)),
             ],
             options={
-                'ordering': ['name'],
-                'abstract': False,
+                "ordering": ["name"],
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='Region',
+            name="Region",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=50, unique=True)),
-                ('name', models.CharField(max_length=100)),
-                ('is_active', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("code", models.CharField(max_length=50, unique=True)),
+                ("name", models.CharField(max_length=100)),
+                ("is_active", models.BooleanField(default=True)),
             ],
             options={
-                'ordering': ['name'],
-                'abstract': False,
+                "ordering": ["name"],
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='SheetingType',
+            name="SheetingType",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=50, unique=True)),
-                ('name', models.CharField(max_length=100)),
-                ('is_active', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("code", models.CharField(max_length=50, unique=True)),
+                ("name", models.CharField(max_length=100)),
+                ("is_active", models.BooleanField(default=True)),
             ],
             options={
-                'ordering': ['name'],
-                'abstract': False,
+                "ordering": ["name"],
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='SteelGrade',
+            name="SteelGrade",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=50, unique=True)),
-                ('name', models.CharField(max_length=100)),
-                ('is_active', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("code", models.CharField(max_length=50, unique=True)),
+                ("name", models.CharField(max_length=100)),
+                ("is_active", models.BooleanField(default=True)),
             ],
             options={
-                'ordering': ['name'],
-                'abstract': False,
+                "ordering": ["name"],
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='VentType',
+            name="VentType",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=50, unique=True)),
-                ('name', models.CharField(max_length=100)),
-                ('is_active', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("code", models.CharField(max_length=50, unique=True)),
+                ("name", models.CharField(max_length=100)),
+                ("is_active", models.BooleanField(default=True)),
             ],
             options={
-                'ordering': ['name'],
-                'abstract': False,
+                "ordering": ["name"],
+                "abstract": False,
             },
         ),
     ]

@@ -5,6 +5,7 @@ from django.dispatch import receiver
 
 DEFAULT_GROUPS = ["Admin", "Sales", "Designer"]
 
+
 @receiver(post_migrate)
 def create_default_groups(sender, **kwargs):
     # Only run after auth & our app are ready

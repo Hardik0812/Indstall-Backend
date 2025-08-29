@@ -1,8 +1,12 @@
+import uuid
+
 from django.db import models
 
+
 class ChoiceBase(models.Model):
-    code = models.CharField(max_length=50, unique=True)   # e.g., 'NORTH'
-    name = models.CharField(max_length=100)              # e.g., '  '
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -11,4 +15,3 @@ class ChoiceBase(models.Model):
 
     def __str__(self):
         return self.name
-    

@@ -1,6 +1,8 @@
 # utils/exception_handler.py
 from rest_framework.views import exception_handler
+
 from .response import error_response
+
 
 def custom_exception_handler(exc, context):
     # Call DRF's default first

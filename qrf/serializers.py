@@ -1,24 +1,42 @@
 # apps/qrf/serializers.py
 from django.db import transaction
 from rest_framework import serializers
-from .models import QRF
+
 from rfq_master.models import Region
+
+from .models import QRF
+
 
 class QRFCreateSerializer(serializers.ModelSerializer):
     # Accept region by id
-    sales_region = serializers.PrimaryKeyRelatedField(queryset=Region.objects.filter(is_active=True))
+    sales_region = serializers.PrimaryKeyRelatedField(
+        queryset=Region.objects.filter(is_active=True)
+    )
 
     class Meta:
         model = QRF
-        # status is managed by server; qrf_no/created_* are read-only
         fields = [
-            "id", "qrf_no", "revision", "revision_date",
-            "client_name", "consultant_name",
-            "sales_region", "job_site",
+            "id",
+            "qrf_no",
+            "revision",
+            "revision_date",
+            "client_name",
+            "consultant_name",
+            "sales_region",
+            "job_site",
             "status",
-            "created_at", "updated_at",
+            "created_at",
+            "updated_at",
         ]
-        read_only_fields = ["id", "qrf_no", "revision", "revision_date", "status", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "qrf_no",
+            "revision",
+            "revision_date",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
 
     def validate(self, attrs):
         # If you want extra validation (e.g., client_name non-empty already ensured by model)
@@ -56,24 +74,45 @@ class QRFDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = QRF
         fields = [
-            "id", "qrf_no", "revision", "revision_date",
-            "client_name", "consultant_name",
-            "sales_region", "job_site",
+            "id",
+            "qrf_no",
+            "revision",
+            "revision_date",
+            "client_name",
+            "consultant_name",
+            "sales_region",
+            "job_site",
             "status",
-            "sales_engineer", "created_by", "updated_by",
-            "created_at", "updated_at",
+            "sales_engineer",
+            "created_by",
+            "updated_by",
+            "created_at",
+            "updated_at",
         ]
 
     def get_sales_region(self, obj):
-        return {"id": obj.sales_region.id, "code": obj.sales_region.code, "name": obj.sales_region.name}
+        return {
+            "id": obj.sales_region.id,
+            "code": obj.sales_region.code,
+            "name": obj.sales_region.name,
+        }
 
     def get_sales_engineer(self, obj):
-        return {"id": obj.sales_engineer_id, "email": getattr(obj.sales_engineer, "email", None)}
+        return {
+            "id": obj.sales_engineer_id,
+            "email": getattr(obj.sales_engineer, "email", None),
+        }
 
     def get_created_by(self, obj):
-        return {"id": obj.created_by_id, "email": getattr(obj.created_by, "email", None)}
+        return {
+            "id": obj.created_by_id,
+            "email": getattr(obj.created_by, "email", None),
+        }
 
     def get_updated_by(self, obj):
         if not obj.updated_by_id:
             return None
-        return {"id": obj.updated_by_id, "email": getattr(obj.updated_by, "email", None)}
+        return {
+            "id": obj.updated_by_id,
+            "email": getattr(obj.updated_by, "email", None),
+        }

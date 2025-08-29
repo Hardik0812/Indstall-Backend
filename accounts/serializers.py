@@ -1,8 +1,9 @@
 from django.contrib.auth import authenticate, get_user_model
-from django.contrib.auth.models import Permission
+from django.contrib.auth.models import Group, Permission
 from rest_framework import serializers
-from django.contrib.auth.models import Group
+
 from accounts.models import User
+
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -34,7 +35,9 @@ class LoginSerializer(serializers.Serializer):
     def get_permissions(self, user: User) -> list[str]:
         # user perms (direct + via groups)
         perms = Permission.objects.filter(user=user).values_list("codename", flat=True)
-        group_perms = Permission.objects.filter(group__user=user).values_list("codename", flat=True)
+        group_perms = Permission.objects.filter(group__user=user).values_list(
+            "codename", flat=True
+        )
         return sorted(set(list(perms) + list(group_perms)))
 
 

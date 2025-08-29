@@ -1,16 +1,37 @@
-from rest_framework.views import APIView
-from rest_framework import status
-from rest_framework_simplejwt.tokens import RefreshToken
-from utils.response import error_response, success_response  # <-- use the helper
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
-from .serializers import LoginSerializer
-from rest_framework_simplejwt.serializers import TokenBlacklistSerializer
 from django.conf import settings
+from django.contrib.auth.models import Group
 from django.core.mail import send_mail
 from django.db import transaction
-from utils.response import success_response, error_response
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.views import APIView
+from rest_framework_simplejwt.serializers import TokenBlacklistSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+
 from utils.password import generate_strong_password
-from .serializers import InviteUserSerializer
+from utils.permissions import IsAdminUser
+from utils.response import error_response, success_response
+
+from .serializers import GroupSerializer, InviteUserSerializer, LoginSerializer
+
+
+class GroupListView(APIView):
+    """
+    List all available groups (roles).
+    Only superusers/admins can see this list.
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        groups = Group.objects.all()
+        serializer = GroupSerializer(groups, many=True)
+        return success_response(
+            message="Groups fetched successfully.",
+            data=serializer.data,
+            status_code=status.HTTP_200_OK,
+        )
+
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
@@ -19,23 +40,23 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
-        include_permissions = serializer.validated_data.get("include_permissions", False)
+        include_permissions = serializer.validated_data.get(
+            "include_permissions", False
+        )
 
         # issue tokens
         refresh = RefreshToken.for_user(user)
         access = str(refresh.access_token)
 
         payload = {
-
-                "access_token": access,
-                "refresh_token": str(refresh),
-                "id": user.id,
-                "email": user.email,
-                "full_name": getattr(user, "full_name", ""),
-                "phone": getattr(user, "phone", ""),
-                "groups": serializer.get_groups(user),
-                "permissions": serializer.get_permissions(user),
-
+            "access_token": access,
+            "refresh_token": str(refresh),
+            "id": user.id,
+            "email": user.email,
+            "full_name": getattr(user, "full_name", ""),
+            "phone": getattr(user, "phone", ""),
+            "groups": serializer.get_groups(user),
+            "permissions": serializer.get_permissions(user),
         }
 
         return success_response(
@@ -44,10 +65,12 @@ class LoginView(APIView):
             status_code=status.HTTP_200_OK,
         )
 
+
 class LogoutView(APIView):
     """
     Blacklist the provided refresh token so it can’t be used again.
     """
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -64,13 +87,14 @@ class LogoutView(APIView):
             return success_response(message="Logged out.", data=[], status_code=200)
 
         return success_response(message="Logged out.", data=[], status_code=200)
-    
+
 
 class InviteUserView(APIView):
     """
     Superadmin/Admin invites a user by email and assigns a group.
     Generates a password and emails it to the user.
     """
+
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     @transaction.atomic

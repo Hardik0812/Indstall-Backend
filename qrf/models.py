@@ -4,13 +4,17 @@ from __future__ import annotations
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+
 from rfq_master.models import Region
+
 # ---------- QRF Header ----------
+
 
 class QRF(models.Model):
     """
     Quote Request Form (header row).
     """
+
     qrf_no = models.CharField(max_length=50, unique=True, editable=False)
     revision = models.PositiveIntegerField(default=0)
     revision_date = models.DateField(null=True, blank=True)
@@ -18,21 +22,42 @@ class QRF(models.Model):
     client_name = models.CharField(max_length=255)
     consultant_name = models.CharField(max_length=255, blank=True)
     sales_engineer = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="qrf_created",
-        help_text="User (Sales) who created the QRF"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="qrf_created",
+        help_text="User (Sales) who created the QRF",
     )
     sales_region = models.ForeignKey(Region, on_delete=models.PROTECT)
     job_site = models.CharField(max_length=255, blank=True)
 
     # Admin/audit
-    status = models.CharField(max_length=30, default="DRAFT", help_text="DRAFT / SUBMITTED / APPROVED / REJECTED")
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="qrf_created_by")
-    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="qrf_updated_by", null=True, blank=True)
+    status = models.CharField(
+        max_length=30,
+        default="DRAFT",
+        help_text="DRAFT / SUBMITTED / APPROVED / REJECTED",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="qrf_created_by",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="qrf_updated_by",
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
-    deleted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="qrf_deleted_by", null=True, blank=True)
-
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="qrf_deleted_by",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -45,9 +70,7 @@ class QRF(models.Model):
             prefix = "IND"  # or fetch dynamically from settings/region
             year = timezone.now().year
             # Count existing QRFs this year to generate sequence
-            last_qrf = QRF.objects.filter(
-                created_at__year=year
-            ).order_by("-id").first()
+            last_qrf = QRF.objects.filter(created_at__year=year).order_by("-id").first()
 
             if last_qrf and last_qrf.qrf_no.startswith(f"{prefix}-{year}"):
                 # extract last sequence number
@@ -62,6 +85,7 @@ class QRF(models.Model):
             self.qrf_no = f"{prefix}-{year}-{new_seq:04d}"
 
         super().save(*args, **kwargs)
+
 
 # # ---------- Building Parameters ----------
 

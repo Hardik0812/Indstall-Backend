@@ -7,37 +7,93 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('rfq_master', '0001_initial'),
+        ("rfq_master", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='QRF',
+            name="QRF",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('qrf_no', models.CharField(editable=False, max_length=50, unique=True)),
-                ('revision', models.PositiveIntegerField(default=0)),
-                ('revision_date', models.DateField(blank=True, null=True)),
-                ('client_name', models.CharField(max_length=255)),
-                ('consultant_name', models.CharField(blank=True, max_length=255)),
-                ('job_site', models.CharField(blank=True, max_length=255)),
-                ('status', models.CharField(default='DRAFT', help_text='DRAFT / SUBMITTED / APPROVED / REJECTED', max_length=30)),
-                ('created_at', models.DateTimeField(default=django.utils.timezone.now)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('deleted_at', models.DateTimeField(blank=True, null=True)),
-                ('created_by', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='qrf_created_by', to=settings.AUTH_USER_MODEL)),
-                ('deleted_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='qrf_deleted_by', to=settings.AUTH_USER_MODEL)),
-                ('sales_engineer', models.ForeignKey(help_text='User (Sales) who created the QRF', on_delete=django.db.models.deletion.PROTECT, related_name='qrf_created', to=settings.AUTH_USER_MODEL)),
-                ('sales_region', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='rfq_master.region')),
-                ('updated_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='qrf_updated_by', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "qrf_no",
+                    models.CharField(editable=False, max_length=50, unique=True),
+                ),
+                ("revision", models.PositiveIntegerField(default=0)),
+                ("revision_date", models.DateField(blank=True, null=True)),
+                ("client_name", models.CharField(max_length=255)),
+                ("consultant_name", models.CharField(blank=True, max_length=255)),
+                ("job_site", models.CharField(blank=True, max_length=255)),
+                (
+                    "status",
+                    models.CharField(
+                        default="DRAFT",
+                        help_text="DRAFT / SUBMITTED / APPROVED / REJECTED",
+                        max_length=30,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(default=django.utils.timezone.now)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("deleted_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="qrf_created_by",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "deleted_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="qrf_deleted_by",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "sales_engineer",
+                    models.ForeignKey(
+                        help_text="User (Sales) who created the QRF",
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="qrf_created",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "sales_region",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to="rfq_master.region",
+                    ),
+                ),
+                (
+                    "updated_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="qrf_updated_by",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
     ]

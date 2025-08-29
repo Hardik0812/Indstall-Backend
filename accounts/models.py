@@ -1,7 +1,9 @@
+import uuid
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-import uuid
+
 
 class CustomUserManager(BaseUserManager):
     use_in_migrations = True
@@ -39,11 +41,10 @@ class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     username = None  # remove username
     email = models.EmailField(_("email address"), unique=True)
-
     full_name = models.CharField(max_length=150, blank=True)
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS: list[str] = [] 
+    REQUIRED_FIELDS: list[str] = []
 
     objects = CustomUserManager()
 
