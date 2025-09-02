@@ -3,6 +3,7 @@ from rest_framework.views import exception_handler
 from .response import error_response
 from .friendly_errors import friendly_message
 
+
 def custom_exception_handler(exc, context):
     drf_response = exception_handler(exc, context)
 

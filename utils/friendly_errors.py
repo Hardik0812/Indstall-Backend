@@ -11,6 +11,7 @@ SIMPLEJWT_CODES = {
     "user_inactive",
 }
 
+
 def _extract_simplejwt_message(data: dict) -> str | None:
     code = data.get("code")
     if not code or code not in SIMPLEJWT_CODES:
@@ -26,6 +27,7 @@ def _extract_simplejwt_message(data: dict) -> str | None:
     if detail:
         return detail
     return "Token not valid"
+
 
 def _flatten_error_data(data, parent_key=None) -> list[str]:
     # SimpleJWT special case
@@ -45,9 +47,13 @@ def _flatten_error_data(data, parent_key=None) -> list[str]:
                     if isinstance(m, (dict, list, tuple)):
                         out.extend(_flatten_error_data(m, parent_key=field))
                     else:
-                        out.append(str(m) if no_prefix else f"{_join(field, parent_key)}: {m}")
+                        out.append(
+                            str(m) if no_prefix else f"{_join(field, parent_key)}: {m}"
+                        )
             else:
-                out.append(str(msgs) if no_prefix else f"{_join(field, parent_key)}: {msgs}")
+                out.append(
+                    str(msgs) if no_prefix else f"{_join(field, parent_key)}: {msgs}"
+                )
     elif isinstance(data, Iterable) and not isinstance(data, (str, bytes)):
         for item in data:
             out.extend(_flatten_error_data(item, parent_key=parent_key))
@@ -55,8 +61,10 @@ def _flatten_error_data(data, parent_key=None) -> list[str]:
         out.append(str(data))
     return out
 
+
 def _join(field, parent):
     return f"{parent}.{field}" if parent else field
+
 
 def friendly_message(err) -> str:
     """

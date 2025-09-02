@@ -4,7 +4,6 @@ from accounts.models import User
 from django.contrib.auth.models import Group
 
 
-
 class Command(BaseCommand):
     help = "Seed default users and assign them to groups"
 
@@ -12,7 +11,11 @@ class Command(BaseCommand):
         # SuperAdmin user
         superadmin, created = User.objects.get_or_create(
             email="superadmin@example.com",
-            defaults={"full_name": "superadmin", "is_staff": True, "is_superuser": True},
+            defaults={
+                "full_name": "superadmin",
+                "is_staff": True,
+                "is_superuser": True,
+            },
         )
         if created:
             superadmin.set_password("superadmin123")
@@ -38,7 +41,11 @@ class Command(BaseCommand):
         # Designer user
         designer, created = User.objects.get_or_create(
             email="designer@example.com",
-            defaults={"full_name": "designer", "is_staff": False, "is_superuser": False},
+            defaults={
+                "full_name": "designer",
+                "is_staff": False,
+                "is_superuser": False,
+            },
         )
         if created:
             designer.set_password("designer123")

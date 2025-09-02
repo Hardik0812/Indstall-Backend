@@ -7,12 +7,22 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework_simplejwt.serializers import TokenBlacklistSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
-
 from utils.password import generate_strong_password
 from utils.permissions import IsAdminUser
 from utils.response import error_response, success_response
+from utils.pagination import (
+    parse_pagination,
+    validate_ordering,
+    paginate_queryset,
+)
 
-from .serializers import GroupSerializer, InviteUserSerializer, LoginSerializer
+from .serializers import (
+    GroupSerializer,
+    InviteUserSerializer,
+    LoginSerializer,
+    User,
+    UserListSerializer,
+)
 
 
 class GroupListView(APIView):
@@ -152,4 +162,74 @@ class InviteUserView(APIView):
             message="User invited successfully.",
             data=data,
             status_code=status.HTTP_201_CREATED,
+        )
+
+
+class UsersListView(APIView):
+    """
+    GET /api/v1/accounts/users/
+      ?page=1
+      &page_size=20
+      &search=jane
+      &is_active=true|false
+      &group=Staff          # exact name (you can switch to id if you prefer)
+      &ordering=-date_joined  # one of: email, full_name, date_joined, last_login, is_active
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    # allowed fields for ?ordering=
+    ORDERING_FIELDS = {"email", "full_name", "date_joined", "last_login", "is_active"}
+
+    def get(self, request):
+        # 1) Base queryset
+        qs = (
+            User.objects.all()
+            .select_related()
+            .prefetch_related("groups")
+            .order_by()  # clear default ordering
+        )
+
+        # 2) Filters
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(Q(email__icontains=search) | Q(full_name__icontains=search))
+
+        is_active = request.query_params.get("is_active")
+        if is_active is not None:
+            v = is_active.lower()
+            if v in ("true", "1", "yes"):
+                qs = qs.filter(is_active=True)
+            elif v in ("false", "0", "no"):
+                qs = qs.filter(is_active=False)
+
+        group = request.query_params.get("group")
+        if group:
+            qs = qs.filter(groups__name=group)
+
+        # 3) Ordering (validated)
+        ordering = validate_ordering(
+            request,
+            allowed_fields=self.ORDERING_FIELDS,
+            default="-date_joined",
+        )
+        qs = qs.order_by(ordering)
+
+        # 4) Pagination (your helpers)
+        page, page_size = parse_pagination(
+            request, default_page=1, default_page_size=20, max_page_size=100
+        )
+        page_obj, meta = paginate_queryset(qs, page, page_size)
+
+        # 5) Serialize current page
+        serializer = UserListSerializer(page_obj.object_list, many=True)
+
+        # 6) Wrap in your success_response
+        # meta already has: page, page_size, total_pages, total_items, has_next, has_prev, next_page, prev_page
+        payload = {**meta, "results": serializer.data}
+
+        return success_response(
+            message="Users fetched successfully.",
+            data=payload,
+            status_code=status.HTTP_200_OK,
         )
