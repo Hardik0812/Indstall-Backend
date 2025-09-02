@@ -6,4 +6,4 @@ from rfq_master.models import Region
 class RegionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Region
-        fields = ["id", "code", "name", "is_active"]
+        fields = ["id", "code", "name"]  # keep it clean

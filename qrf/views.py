@@ -4,6 +4,8 @@ from rest_framework.views import APIView
 
 from utils.permissions import IsSalesUser
 from utils.response import error_response, success_response
+
+from django.db.models import Q
 from utils.pagination import (
     parse_pagination,
     validate_ordering,
