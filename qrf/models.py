@@ -1,20 +1,21 @@
 # apps/qrf/models.py
 from __future__ import annotations
-
+import uuid
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
-
+from django.core.validators import MinValueValidator
 from rfq_master.models import Region
+from utils.base_model import BaseModel
 
 # ---------- QRF Header ----------
 
 
-class QRF(models.Model):
+class QRF(BaseModel):
     """
     Quote Request Form (header row).
     """
-
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     qrf_no = models.CharField(max_length=50, unique=True, editable=False)
     revision = models.PositiveIntegerField(default=0)
     revision_date = models.DateField(null=True, blank=True)
@@ -36,29 +37,8 @@ class QRF(models.Model):
         default="DRAFT",
         help_text="DRAFT / SUBMITTED / APPROVED / REJECTED",
     )
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="qrf_created_by",
-    )
-    updated_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="qrf_updated_by",
-        null=True,
-        blank=True,
-    )
-    created_at = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
-    deleted_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="qrf_deleted_by",
-        null=True,
-        blank=True,
-    )
-
+    design_code = models.CharField(max_length=50, blank=True)
+    serviceability_code = models.CharField(max_length=50, blank=True)
     class Meta:
         ordering = ["-created_at"]
 
@@ -87,156 +67,538 @@ class QRF(models.Model):
         super().save(*args, **kwargs)
 
 
-# # ---------- Building Parameters ----------
 
-# class QRFBuilding(models.Model):
-#     qrf = models.OneToOneField(QRF, on_delete=models.CASCADE, related_name="building")
-#     design_code = models.CharField(max_length=100, default="AISC-360-2016", blank=True)
-#     frame_type = models.CharField(max_length=30, choices=FrameType.choices, default=FrameType.CLEAR_SPAN)
-#     width_m = models.DecimalField(max_digits=8, decimal_places=3, validators=[MinValueValidator(0)])
-#     length_m = models.DecimalField(max_digits=8, decimal_places=3, validators=[MinValueValidator(0)])
-#     clear_height_m = models.DecimalField(max_digits=6, decimal_places=3, validators=[MinValueValidator(0)])
-#     base_plate_below_ffl_mm = models.IntegerField(default=0, help_text="Base plate bottom wrt FFL (mm)")
+class QRFBuildingUnit(models.Model):
+    """
+    Represents a single building unit (Main Building or a Lean-To Shed).
+    """
+    
+    UNIT_TYPE_CHOICES = [
+        ("MAIN", "Main Building"),
+        ("LEAN_TO", "Lean-To Shed"),
+    ]
 
-#     roof_slope_ratio = models.DecimalField(
-#         max_digits=5, decimal_places=3, default=0.0, help_text="e.g. 0.5 => 1:2 slope"
-#     )
+    FRAME_TYPE_CHOICES = [
+        ("RF", "RF (Main Building)"),
+        ("LEAN_TO", "Lean-To"),
+        ("CRANE", "Crane Support"),
+        ("CANOPY", "Canopy"),
+        ("OPEN", "Open Structure"),
+        ("OTHER", "Other"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="building_units")
 
-#     # Bay spacing and internal columns can be complex; store structured details as JSON
-#     bay_spacing_m = models.JSONField(default=list, blank=True, help_text="List of bay spacings in meters")
-#     internal_columns = models.JSONField(default=dict, blank=True, help_text="{'count': int, 'spacing_m': [...]}")
+    unit_type = models.CharField(max_length=10, choices=UNIT_TYPE_CHOICES, default="MAIN")
+    name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Optional name like Main-1, Lean-To-1, Lean-To Loading Shed"
+    )
 
-#     # Bracing (roof/wall)
-#     roof_bracing = models.CharField(max_length=100, blank=True, help_text="e.g., Full ht. cross bracing @ bays")
-#     wall_bracing = models.CharField(max_length=100, blank=True)
+    frame_type = models.CharField(max_length=30, choices=FRAME_TYPE_CHOICES, blank=True)
+    order = models.PositiveIntegerField(default=1, help_text="Used to order lean-tos sequentially")
 
-#     # Mezzanine summary; detailed per-level captured in QRFMezzanine
-#     has_mezzanine = models.BooleanField(default=False)
+    def __str__(self):
+        return f"{self.get_unit_type_display()} ({self.name or self.id}) for {self.qrf.qrf_no}"
 
-#     # Drainage
-#     gutters_required = models.BooleanField(default=True)
-#     downspouts_required = models.BooleanField(default=True)
-#     header_pipe_arrangement = models.CharField(max_length=255, blank=True)
+class QRFBuildingParameter(models.Model):
+    """
+    Represents each parameter row (e.g. Width, Length, Clear Height)
+    for a specific building unit.
+    """
 
-#     notes = models.TextField(blank=True)
+    END_CONDITION_CHOICES = [
+        ("C/C_COL", "C/C of Column"),
+        ("O/O_STEEL", "O/O of Steel"),
+        ("WITH_CANTILEVER", "With Cantilever"),
+        ("WITHOUT_CANTILEVER", "Without Cantilever"),
+        ("NA", "Not Applicable"),
+    ]
 
-#     def __str__(self) -> str:
-#         return f"Building for {self.qrf.qrf_no}"
+    UNIT_CHOICES = [
+        ("meter", "Meter"),
+        ("degree", "Degree"),
+        ("number", "Number"),
+        ("boolean", "Yes/No"),
+        ("text", "Text"),
+    ]
 
+    PARAMETER_CHOICES = [
+        ("WIDTH", "Width (m)"),
+        ("LENGTH", "Length (m)"),
+        ("CLEAR_HEIGHT", "Clear Height (m)"),
+        ("BASE_PLATE", "Base Plate Bottom With ref to FFL"),
+        ("ROOF_SLOPE", "Roof Slope"),
+        ("BAY_SPACING", "Bay Spacing (C/C)"),
+        ("INTERNAL_COLUMN", "Internal Column Nos & Spacing"),
+        ("END_WALL_COLUMN", "End Wall Column Spacing"),
+        ("BWALL_FRONT", "B/wall Condition : Front Side wall"),
+        ("BWALL_BACK", "B/wall Condition : Back Side wall"),
+        ("BWALL_LEFT", "B/wall Condition : Left End wall"),
+        ("BWALL_RIGHT", "B/wall Condition : Right End wall"),
+        ("FUTURE_EXPANSION", "Future Expansion"),
+        ("ROOF_EXTENSION", "Roof Extension"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    building_unit = models.ForeignKey(QRFBuildingUnit, on_delete=models.CASCADE, related_name="parameters")
+    parameter_type = models.CharField(max_length=50, choices=PARAMETER_CHOICES)
 
-# class QRFMezzanine(models.Model):
-#     qrf = models.ForeignKey(QRF, on_delete=models.CASCADE, related_name="mezzanines")
-#     level_name = models.CharField(max_length=50, default="Mezzanine")
-#     area_m2 = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
-#     live_load_kN_m2 = models.DecimalField(max_digits=6, decimal_places=2, validators=[MinValueValidator(0)], null=True, blank=True)
-#     slab_type = models.CharField(max_length=100, blank=True)  # e.g., Deck slab / RCC / etc.
-#     remarks = models.CharField(max_length=255, blank=True)
+    dimension_value = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    text_value = models.CharField(max_length=255, blank=True)  # For text-based inputs like wall conditions
+    unit = models.CharField(max_length=20, choices=UNIT_CHOICES, blank=True)
+    end_condition = models.CharField(max_length=30, choices=END_CONDITION_CHOICES, blank=True)
 
+    extra_data = models.JSONField(default=dict, blank=True, help_text="Optional data for special cases")
 
-# # ---------- Material / Section Specs ----------
-
-# class QRFMaterialSpec(models.Model):
-#     qrf = models.OneToOneField(QRF, on_delete=models.CASCADE, related_name="materials")
-
-#     main_frame_steel = models.CharField(max_length=40, choices=SteelGrade.choices, default=SteelGrade.ASTM_A572GR50)
-#     secondary_steel = models.CharField(max_length=40, choices=SteelGrade.choices, default=SteelGrade.ASTM_A36)
-#     anchor_bolts = models.CharField(max_length=100, blank=True)  # e.g., ASTM F1554 Gr.55
-#     ceb_required = models.BooleanField(default=False, help_text="Column End Base / Expansion bolts")
-
-#     purlin_spacing_m = models.DecimalField(max_digits=5, decimal_places=3, validators=[MinValueValidator(0)], null=True, blank=True)
-#     girt_spacing_m = models.DecimalField(max_digits=5, decimal_places=3, validators=[MinValueValidator(0)], null=True, blank=True)
-
-#     frame_design_notes = models.TextField(blank=True)
-#     secondary_members_notes = models.TextField(blank=True)
-
-
-# # ---------- Cladding / Roof & Wall ----------
-
-# class QRFCladdingSpec(models.Model):
-#     qrf = models.OneToOneField(QRF, on_delete=models.CASCADE, related_name="cladding")
-
-#     roof_sheet = models.CharField(max_length=40, choices=SheetingType.choices, default=SheetingType.TCT_COLOR_0475)
-#     wall_sheet = models.CharField(max_length=40, choices=SheetingType.choices, default=SheetingType.TCT_COLOR_0475)
-
-#     roof_liner = models.CharField(max_length=40, choices=SheetingType.choices, default=SheetingType.OTHER, blank=True)
-#     wall_liner = models.CharField(max_length=40, choices=SheetingType.choices, default=SheetingType.OTHER, blank=True)
-
-#     roof_insulation_type = models.CharField(max_length=30, choices=InsulationType.choices, default=InsulationType.NONE)
-#     roof_insulation_thickness_mm = models.PositiveIntegerField(null=True, blank=True)
-
-#     wall_insulation_type = models.CharField(max_length=30, choices=InsulationType.choices, default=InsulationType.NONE)
-#     wall_insulation_thickness_mm = models.PositiveIntegerField(null=True, blank=True)
-
-#     skylight_percent = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0)], null=True, blank=True)
-#     skylight_notes = models.CharField(max_length=255, blank=True)
-
-#     roof_vent_type = models.CharField(max_length=30, choices=VentType.choices, default=VentType.NONE)
-#     vent_qty = models.PositiveIntegerField(default=0)
-
-#     color_notes = models.CharField(max_length=255, blank=True)
-#     special_panels = models.CharField(max_length=255, blank=True)  # e.g., PU/PIR panels, sandwich, etc.
+    def __str__(self):
+        return f"{self.get_parameter_type_display()} for {self.building_unit}"
 
 
-# # ---------- Openings / Accessories ----------
 
-# class QRFOpening(models.Model):
-#     qrf = models.ForeignKey(QRF, on_delete=models.CASCADE, related_name="openings")
-#     opening_type = models.CharField(max_length=30, choices=OpeningType.choices, default=OpeningType.OTHER)
-#     width_m = models.DecimalField(max_digits=6, decimal_places=3, validators=[MinValueValidator(0)])
-#     height_m = models.DecimalField(max_digits=6, decimal_places=3, validators=[MinValueValidator(0)])
-#     quantity = models.PositiveIntegerField(default=1)
+class QRFMinThicknessCriteria(models.Model):
+    """
+    Rows for Min Thickness Criteria section (B/U Web, B/U Flange, etc.).
+    Each record can be added from Admin dynamically.
+    """
+    THICKNESS_CHOICES = [
+        ("AS_PER_DESIGN", "As per design"),
+        ("6MM", "6 mm"),
+        ("8MM", "8 mm"),
+        ("10MM", "10 mm"),
+        ("12MM", "12 mm"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="min_thickness_criteria")
+    name = models.CharField(max_length=100, help_text="Label, e.g. 'B/U Web'")
+    dropdown = models.CharField(max_length=50, choices=THICKNESS_CHOICES, blank=True)
 
-#     location = models.CharField(max_length=100, blank=True, help_text="e.g., Grid/Bay reference")
-#     is_motorized = models.BooleanField(default=False)
-#     glazing = models.CharField(max_length=100, blank=True)  # for windows
-#     remarks = models.CharField(max_length=255, blank=True)
-
-
-# class QRFCanopy(models.Model):
-#     qrf = models.ForeignKey(QRF, on_delete=models.CASCADE, related_name="canopies")
-#     description = models.CharField(max_length=255, help_text="e.g., 3m canopy @ Bay 1-2")
-#     projection_m = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0)])
-#     length_m = models.DecimalField(max_digits=7, decimal_places=2, validators=[MinValueValidator(0)])
-#     sheet_type = models.CharField(max_length=40, choices=SheetingType.choices, default=SheetingType.OTHER, blank=True)
-#     remarks = models.CharField(max_length=255, blank=True)
+    def __str__(self):
+        return f"{self.name} - {self.get_dropdown_display()} ({self.qrf.qrf_no})"
 
 
-# class QRFCrane(models.Model):
-#     qrf = models.ForeignKey(QRF, on_delete=models.CASCADE, related_name="cranes")
-#     crane_type = models.CharField(max_length=20, choices=CraneType.choices, default=CraneType.EOT)
-#     capacity_t = models.DecimalField(max_digits=6, decimal_places=2, validators=[MinValueValidator(0)])
-#     span_m = models.DecimalField(max_digits=6, decimal_places=2, validators=[MinValueValidator(0)])
-#     qty = models.PositiveIntegerField(default=1)
-#     hook_height_m = models.DecimalField(max_digits=6, decimal_places=2, validators=[MinValueValidator(0)], null=True, blank=True)
-#     remarks = models.CharField(max_length=255, blank=True)
+class QRFSecondaryDetails(models.Model):
+    """
+    Rows for Secondary Details section (Purlin spacing, Girt spacing, etc.).
+    """
+    SPACING_CHOICES = [
+        ("AS_PER_DESIGN", "As per design"),
+        ("900", "900 mm"),
+        ("1000", "1000 mm"),
+        ("1200", "1200 mm"),
+        ("1500", "1500 mm"),
+    ]
+    GSM_CHOICES = [
+        ("120", "120 GSM"),
+        ("180", "180 GSM"),
+        ("240", "240 GSM"),
+        ("275", "275 GSM"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="secondary_details")
+    name = models.CharField(max_length=100, help_text="Label, e.g. 'Purlin spacing'")
+    dropdown = models.CharField(max_length=50, choices=SPACING_CHOICES, blank=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.dropdown} ({self.qrf.qrf_no})"
 
 
-# # ---------- Files / Revisions / Notes ----------
+class QRFBaseCondition(models.Model):
+    """
+    Rows for Base Condition section (Main Col bases, CB Col bases, etc.).
+    """
+    BASE_CHOICES = [
+        ("AS_PER_DESIGN", "As per design"),
+        ("FIXED", "Fixed"),
+        ("PINNED", "Pinned"),
+        ("HINGED", "Hinged"),
+    ]   
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="base_conditions")
+    name = models.CharField(max_length=100, help_text="Label, e.g. 'Main Col bases'")
+    dropdown = models.CharField(max_length=50, choices=BASE_CHOICES, blank=True)
 
-# def qrf_upload_to(instance: "QRFAttachment", filename: str) -> str:
-#     return f"qrf/{instance.qrf.qrf_no}/attachments/{filename}"
-
-# class QRFAttachment(models.Model):
-#     qrf = models.ForeignKey(QRF, on_delete=models.CASCADE, related_name="attachments")
-#     file = models.FileField(upload_to=qrf_upload_to)
-#     description = models.CharField(max_length=255, blank=True)
-#     uploaded_at = models.DateTimeField(default=timezone.now)
-#     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-
-# class QRFRevision(models.Model):
-#     qrf = models.ForeignKey(QRF, on_delete=models.CASCADE, related_name="revisions")
-#     revision_no = models.PositiveIntegerField()
-#     changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-#     changed_at = models.DateTimeField(default=timezone.now)
-#     change_notes = models.TextField(blank=True)
-
-#     class Meta:
-#         unique_together = [("qrf", "revision_no")]
-#         ordering = ["-changed_at"]
+    def __str__(self):
+        return f"{self.name} - {self.get_dropdown_display()} ({self.qrf.qrf_no})"
 
 
-# class QRFNote(models.Model):
-#     qrf = models.ForeignKey(QRF, on_delete=models.CASCADE, related_name="notes")
-#     note = models.TextField()
-#     added_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-#     added_at = models.DateTimeField(default=timezone.now)
+class QRFBracingCondition(models.Model):
+    """
+    Rows for Bracing Condition section (Roof member, Wall member, etc.).
+    """
+    BRACING_CHOICES = [
+        ("AS_PER_DESIGN", "As per design"),
+        ("FULL_HT_CROSS", "Full height cross"),
+        ("DIAGONAL", "Diagonal"),
+        ("K_BRACE", "K-Brace"),
+        ("NONE", "None"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="bracing_conditions")
+    name = models.CharField(max_length=100, help_text="Label, e.g. 'Roof member'")
+    dropdown = models.CharField(max_length=50, choices=BRACING_CHOICES, blank=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.get_dropdown_display()} ({self.qrf.qrf_no})"
+
+class QRFSeismicLoading(models.Model):
+
+    BRACING_CHOICES = [
+        ("AS_PER_DESIGN", "As per design"),
+        ("FULL_HT_CROSS", "Full height cross"),
+        ("DIAGONAL", "Diagonal"),
+        ("K_BRACE", "K-Brace"),
+        ("NONE", "None"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="seismic_loadings")
+    name = models.CharField(max_length=100, help_text="Label, e.g. 'Roof member'")
+    dropdown = models.CharField(max_length=50, choices=BRACING_CHOICES, blank=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.get_dropdown_display()} ({self.qrf.qrf_no})"
+
+class QRFWindLoading(models.Model):
+
+    BRACING_CHOICES = [
+        ("AS_PER_DESIGN", "As per design"),
+        ("FULL_HT_CROSS", "Full height cross"),
+        ("DIAGONAL", "Diagonal"),
+        ("K_BRACE", "K-Brace"),
+        ("NONE", "None"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="wind_loadings")
+    name = models.CharField(max_length=100, help_text="Label, e.g. 'Roof member'")
+    dropdown = models.CharField(max_length=50, choices=BRACING_CHOICES, blank=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.get_dropdown_display()} ({self.qrf.qrf_no})"
+    
+
+class QRFGravityLoading(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="gravity_loadings")
+    name = models.CharField(max_length=100, help_text="Label, e.g. 'Roof member'")
+    load_value = models.CharField(max_length=100, help_text="Label, e.g. 'Roof member'")
+    unit = models.CharField(max_length=100, help_text="Label, e.g. 'Roof member'")
+    location = models.CharField(max_length=100, help_text="Label, e.g. 'Roof member'")
+    
+
+
+    def __str__(self):
+        return f"{self.name} - {self.get_dropdown_display()} ({self.qrf.qrf_no})"
+    
+
+class QRFBuildingAddition(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="additional")
+    name = models.CharField(max_length=100, help_text="Label, e.g. 'Roof member'")
+    value = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.name} - {self.get_dropdown_display()} ({self.qrf.qrf_no})"
+    
+class QRFSheetingDetail(models.Model):
+    """
+    Dynamic table for 'Sheeting & Gutter Down Takes' section.
+    Each record represents one line (e.g. Roof Sheeting, Gutter, Ridge Vent).
+    """
+
+    SHEETING_CHOICES = [
+        ("AS_PER_DESIGN", "As per design"),
+        ("GALVALUME", "Galvalume"),
+        ("TCT_COLOR", "TCT Color"),
+        ("0.47_TCT", "0.475mm thk TCT Color"),
+        ("0.50_TCT", "0.50mm thk TCT Color"),
+        ("0.50_TCT_LINER", "0.50mm thk TCT Color Liner"),
+        ("N_A", "N/A"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="sheeting_details")
+
+    # Each row
+    name = models.CharField(
+        max_length=100,
+        help_text="Label like 'Roof Sheeting', 'Gutter', 'Ridge Vent', etc."
+    )
+    specification = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="e.g. '0.475mm thk TCT Color' or 'Galvalume pipe'"
+    )
+    additional_requirement = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="e.g. 'Sub purlin requirement', 'Header pipe arrangement'"
+    )
+    mesh = models.BooleanField(default=False, help_text="Is mesh required?")
+    insulation = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Optional e.g. 'Mesh', 'Fiber', etc."
+    )
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.name} - {self.qrf.qrf_no}"
+
+
+class QRFCanopy(models.Model):
+    """
+    Canopy details table.
+    Each QRF can have multiple canopy rows.
+    """
+    TYPE_CHOICES = [
+        ("SLOPE_AWAY", "Slope away from building"),
+        ("SLOPE_TOWARDS", "Slope towards building"),
+        ("FLAT", "Flat"),
+        ("CUSTOM", "Custom"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="canopies")
+    location = models.CharField(max_length=100, blank=True)
+    nos = models.PositiveIntegerField(null=True, blank=True)
+    length_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    width_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    clear_height_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    type_of_canopy = models.CharField(max_length=50, choices=TYPE_CHOICES, blank=True)
+    soffit_required = models.BooleanField(default=False)
+    gutter_and_downtake = models.BooleanField(default=False)
+
+    remarks = models.TextField(blank=True)
+
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Canopy @ {self.location or 'N/A'} ({self.qrf.qrf_no})"
+
+
+class QRFFramedOpening(models.Model):
+    """
+    Framed Opening details table.
+    Each QRF can have multiple framed openings.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="framed_openings")
+
+    location = models.CharField(max_length=100, blank=True)
+    nos = models.PositiveIntegerField(null=True, blank=True)
+    width_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    height_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    door_type = models.CharField(max_length=100, blank=True)
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Framed Opening @ {self.location or 'N/A'} ({self.qrf.qrf_no})"
+
+
+class QRFMezzanine(models.Model):
+    """
+    Mezzanine floor details table.
+    Each QRF can have multiple mezzanine entries.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="mezzanines")
+
+    location = models.CharField(max_length=100, blank=True)
+    ll_kn_sqm = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text="Live Load (kN/sqm)")
+    dl_kn_sqm = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text="Dead Load (kN/sqm)")
+    cl_kn_sqm = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text="Collateral Load (kN/sqm)")
+
+    height_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    slab_thk_mm = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text="Slab Thickness (mm)")
+
+    including_deck = models.BooleanField(default=False, help_text="True = Including Deck, False = Excluding Deck")
+    deck_sheet_thk_mm = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text="Deck Sheet Thickness (mm)")
+
+    handrails = models.BooleanField(default=False)
+    nos_of_staircase = models.PositiveIntegerField(null=True, blank=True)
+    staircase_treads = models.CharField(max_length=100, blank=True)
+    shear_studs = models.BooleanField(default=False)
+
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Mezzanine @ {self.location or 'N/A'} ({self.qrf.qrf_no})"
+
+class QRFCrane(models.Model):
+    """
+    Crane details table.
+    Each QRF can have multiple crane entries.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="cranes")
+
+    type = models.CharField(max_length=50, blank=True)
+    location = models.CharField(max_length=100, blank=True)
+    capacity_mt = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    nos = models.PositiveIntegerField(null=True, blank=True)
+    span_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    height_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    height_reference = models.CharField(max_length=100, blank=True, help_text="Top of crane beam, etc.")
+    tandem_operation = models.BooleanField(default=False)
+    walkway = models.BooleanField(default=False)
+    walkway_width_m = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    walkway_handrail = models.BooleanField(default=False)
+    cage_ladder = models.BooleanField(default=False)
+    crane_beam_by = models.CharField(max_length=100, blank=True)
+
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Crane @ {self.location or 'N/A'} ({self.qrf.qrf_no})"
+
+
+class QRFFascia(models.Model):
+    """
+    Fascia details.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="fascias")
+
+    location = models.CharField(max_length=100, blank=True)
+    type_of_fascia = models.CharField(max_length=100, blank=True)
+    fascia_upto = models.CharField(max_length=100, blank=True)
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Fascia @ {self.location or 'N/A'} ({self.qrf.qrf_no})"
+
+class QRFPartitionWall(models.Model):
+    """
+    Partition wall details table.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="partition_walls")
+
+    location = models.CharField(max_length=100, blank=True)
+    length_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    type_of_sheeting = models.CharField(max_length=100, blank=True)
+    single_or_double_side = models.CharField(max_length=50, blank=True)
+    permanent_or_removable = models.CharField(max_length=50, blank=True)
+    bwall_condition = models.CharField(max_length=100, blank=True)
+    girt_condition = models.CharField(max_length=100, blank=True)
+    insulation = models.CharField(max_length=100, blank=True)
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Partition Wall @ {self.location or 'N/A'} ({self.qrf.qrf_no})"
+
+class QRFRoofMonitor(models.Model):
+    """
+    Roof monitor details.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="roof_monitors")
+
+    location = models.CharField(max_length=100, blank=True)
+    size = models.CharField(max_length=50, blank=True)
+    length_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    acph = models.CharField(max_length=50, blank=True, help_text="Air changes per hour")
+    louvers = models.CharField(max_length=100, blank=True)
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Roof Monitor @ {self.location or 'N/A'} ({self.qrf.qrf_no})"
+
+class QRFLouver(models.Model):
+    """
+    Louver details.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="louvers")
+
+    location = models.CharField(max_length=100, blank=True)
+    length_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    height_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    nos = models.PositiveIntegerField(null=True, blank=True)
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Louver @ {self.location or 'N/A'} ({self.qrf.qrf_no})"
+
+class QRFSafetyLifeLineSystem(models.Model):
+    """
+    Safety life line system details.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="safety_life_line_systems")
+
+    location = models.CharField(max_length=100, blank=True)
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Safety Life Line System @ {self.location or 'N/A'} ({self.qrf.qrf_no})"
+
+class QRFCageLadder(models.Model):
+    """
+    Cage ladder details table.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="cage_ladders")
+
+    quantity = models.PositiveIntegerField(null=True, blank=True)
+    location = models.CharField(max_length=100, blank=True)
+    height_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Cage Ladder @ {self.location or 'N/A'} ({self.qrf.qrf_no})"
+
+class QRFPipeRackCableTray(models.Model):
+    """
+    Pipe rack / cable tray details.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    qrf = models.ForeignKey("qrf.QRF", on_delete=models.CASCADE, related_name="pipe_rack_trays")
+
+    location = models.CharField(max_length=100, blank=True)
+    height_from_ffl_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    bracket_width_mm = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    one_side_or_two = models.CharField(max_length=50, blank=True)
+    loading_kg_per_m = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    supporting_structure_required = models.BooleanField(default=False)
+    supporting_structure_type = models.CharField(max_length=100, blank=True, help_text="e.g. Hot Rolled / Cold Formed")
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Pipe Rack/Cable Tray @ {self.location or 'N/A'} ({self.qrf.qrf_no})"

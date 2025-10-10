@@ -12,7 +12,7 @@ class RegionListAPIView(APIView):
     Returns standardized response using success_response.
     """
 
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:

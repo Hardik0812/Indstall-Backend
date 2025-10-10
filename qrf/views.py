@@ -1,124 +1,126 @@
-from rest_framework import status
+from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
 
-from utils.permissions import IsSalesUser
-from utils.response import error_response, success_response
-
-from django.db.models import Q
-from utils.pagination import (
-    parse_pagination,
-    validate_ordering,
-    paginate_queryset,
-    parse_date_range,
-)
-
-from .models import QRF
+from qrf.utils import initialize_qrf_dependencies
+from .models import *
+from .serializers import *
 
 
-from .serializers import QRFCreateSerializer, QRFDetailSerializer
+
+class QRFViewSet(viewsets.ModelViewSet):
+    queryset = QRF.objects.all().prefetch_related("building_units__parameters")
+    serializer_class = QRFSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        qrf = serializer.save(created_by=self.request.user, updated_by=self.request.user)
+        initialize_qrf_dependencies(qrf)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
 
 
-class QRFCreateView(APIView):
-    permission_classes = [IsAuthenticated, IsSalesUser]
-
-    def post(self, request):
-        serializer = QRFCreateSerializer(
-            data=request.data, context={"request": request}
-        )
-        if serializer.is_valid():
-            qrf = serializer.save()
-            return success_response(
-                message="QRF created successfully.",
-                data=QRFDetailSerializer(qrf).data,
-                status_code=status.HTTP_201_CREATED,
-            )
-        return error_response(
-            message="Invalid data.",
-            data=serializer.errors,
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
-
-class QRFListView(APIView):
+class QRFStructuralCriteriaViewSet(viewsets.ModelViewSet):
     """
-    GET /api/v1/qrf/
-      ?page=1
-      &page_size=20
-      &search=acme
-      &status=DRAFT
-      &region=<region_uuid>
-      &start=2025-01-01
-      &end=2025-12-31
-      &ordering=-created_at
+    Saves all MinThickness, Secondary, Base, and Bracing conditions.
     """
+    permission_classes = [IsAuthenticated]
+    queryset = (
+        QRFMinThicknessCriteria.objects.all()
+        .select_related("qrf")
+    )
+    serializer_class = QRFMinThicknessCriteriaSerializer
 
-    permission_classes = [IsAuthenticated, IsSalesUser]
 
-    # fields clients can order by (prefix '-' allowed)
-    ALLOWED_ORDERING = [
-        "qrf_no",
-        "client_name",
-        "consultant_name",
-        "job_site",
-        "status",
-        "created_at",
-        "updated_at",
-    ]
+class QRFGravityLoadingViewSet(viewsets.ModelViewSet):
+    queryset = QRFGravityLoading.objects.all().select_related("qrf")
+    serializer_class = QRFGravityLoadingSerializer
+    permission_classes = [IsAuthenticated]
 
-    def get_queryset(self, request):
-        qs = QRF.objects.select_related(
-            "sales_region", "sales_engineer", "created_by", "updated_by"
-        ).all()
 
-        # --- filters ---
-        search = request.query_params.get("search")
-        if search:
-            s = search.strip()
-            qs = qs.filter(
-                Q(qrf_no__icontains=s)
-                | Q(client_name__icontains=s)
-                | Q(consultant_name__icontains=s)
-                | Q(job_site__icontains=s)
-            )
+class QRFSeismicLoadingViewSet(viewsets.ModelViewSet):
+    queryset = QRFSeismicLoading.objects.all().select_related("qrf")
+    serializer_class = QRFSeismicLoadingSerializer
+    permission_classes = [IsAuthenticated]
 
-        status_param = request.query_params.get("status")
-        if status_param:
-            qs = qs.filter(status__iexact=status_param.strip())
 
-        region_id = request.query_params.get("region")
-        if region_id:
-            qs = qs.filter(sales_region_id=region_id)
+class QRFWindLoadingViewSet(viewsets.ModelViewSet):
+    queryset = QRFWindLoading.objects.all().select_related("qrf")
+    serializer_class = QRFWindLoadingSerializer
+    permission_classes = [IsAuthenticated]
 
-        start_dt, end_dt = parse_date_range(request, start_key="start", end_key="end")
-        if start_dt:
-            qs = qs.filter(created_at__gte=start_dt)
-        if end_dt:
-            qs = qs.filter(created_at__lte=end_dt)
 
-        # --- ordering ---
-        ordering = validate_ordering(
-            request,
-            allowed_fields=self.ALLOWED_ORDERING,
-            default="-created_at",
-        )
-        return qs.order_by(ordering)
+class QRFBuildingAdditionViewSet(viewsets.ModelViewSet):
+    queryset = QRFBuildingAddition.objects.all().select_related("qrf")
+    serializer_class = QRFBuildingAdditionSerializer
+    permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        qs = self.get_queryset(request)
+class QRFSheetingDetailViewSet(viewsets.ModelViewSet):
+    queryset = QRFSheetingDetail.objects.all().select_related("qrf")
+    serializer_class = QRFSheetingDetailSerializer
+    permission_classes = [IsAuthenticated]
 
-        # pagination
-        page, page_size = parse_pagination(
-            request, default_page=1, default_page_size=10, max_page_size=100
-        )
-        page_obj, meta = paginate_queryset(qs, page=page, page_size=page_size)
+class QRFCanopyViewSet(viewsets.ModelViewSet):
+    queryset = QRFCanopy.objects.all().select_related("qrf")
+    serializer_class = QRFCanopySerializer
+    permission_classes = [IsAuthenticated]
 
-        # serialize current page
-        serializer = QRFDetailSerializer(page_obj.object_list, many=True)
 
-        payload = {**meta, "results": serializer.data}
-        return success_response(
-            message="QRFs fetched successfully.",
-            data=payload,
-            status_code=status.HTTP_200_OK,
-        )
+class QRFFramedOpeningViewSet(viewsets.ModelViewSet):
+    queryset = QRFFramedOpening.objects.all().select_related("qrf")
+    serializer_class = QRFFramedOpeningSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class QRFMezzanineViewSet(viewsets.ModelViewSet):
+    queryset = QRFMezzanine.objects.all().select_related("qrf")
+    serializer_class = QRFMezzanineSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class QRFCraneViewSet(viewsets.ModelViewSet):
+    queryset = QRFCrane.objects.all().select_related("qrf")
+    serializer_class = QRFCraneSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class QRFFasciaViewSet(viewsets.ModelViewSet):
+    queryset = QRFFascia.objects.all().select_related("qrf")
+    serializer_class = QRFFasciaSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class QRFPartitionWallViewSet(viewsets.ModelViewSet):
+    queryset = QRFPartitionWall.objects.all().select_related("qrf")
+    serializer_class = QRFPartitionWallSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class QRFRoofMonitorViewSet(viewsets.ModelViewSet):
+    queryset = QRFRoofMonitor.objects.all().select_related("qrf")
+    serializer_class = QRFRoofMonitorSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class QRFLouverViewSet(viewsets.ModelViewSet):
+    queryset = QRFLouver.objects.all().select_related("qrf")
+    serializer_class = QRFLouverSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class QRFSafetyLifeLineSystemViewSet(viewsets.ModelViewSet):
+    queryset = QRFSafetyLifeLineSystem.objects.all().select_related("qrf")
+    serializer_class = QRFSafetyLifeLineSystemSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class QRFCageLadderViewSet(viewsets.ModelViewSet):
+    queryset = QRFCageLadder.objects.all().select_related("qrf")
+    serializer_class = QRFCageLadderSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class QRFPipeRackCableTrayViewSet(viewsets.ModelViewSet):
+    queryset = QRFPipeRackCableTray.objects.all().select_related("qrf")
+    serializer_class = QRFPipeRackCableTraySerializer
+    permission_classes = [IsAuthenticated]
