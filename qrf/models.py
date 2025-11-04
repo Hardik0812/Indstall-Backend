@@ -48,24 +48,24 @@ class QRF(BaseModel):
     @classmethod
     def generate_unique_qrf_no(cls):
         """
-        Generates a unique, sequential QRF number like IND-2025-0004.
-        This is done atomically to avoid duplicates under concurrency.
+        Generates a unique sequential QRF number like IND-2025-0001.
+        Safe against concurrency using select_for_update().
         """
         with transaction.atomic():
-            year = timezone.now().year
-            prefix = f"IND-{year}-"
+            current_year = timezone.now().year
+            prefix = f"IND-{current_year}-"
 
-            # Lock table rows for this query to avoid race conditions
-            last = (
+            # Lock table for this prefix so no two transactions overlap
+            last_qrf = (
                 cls.objects.select_for_update()
                 .filter(qrf_no__startswith=prefix)
                 .order_by("-created_at")
                 .first()
             )
 
-            if last and last.qrf_no:
+            if last_qrf and last_qrf.qrf_no:
                 try:
-                    last_number = int(last.qrf_no.split("-")[-1])
+                    last_number = int(last_qrf.qrf_no.split("-")[-1])
                 except Exception:
                     last_number = 0
             else:
@@ -74,28 +74,6 @@ class QRF(BaseModel):
             next_number = last_number + 1
             return f"{prefix}{next_number:04d}"
         
-    # def save(self, *args, **kwargs):
-    #     if not self.qrf_no:  # only generate first time
-    #         prefix = "IND"  # or fetch dynamically from settings/region
-    #         year = timezone.now().year
-    #         # Count existing QRFs this year to generate sequence
-    #         last_qrf = QRF.objects.filter(created_at__year=year).order_by("-id").first()
-
-    #         if last_qrf and last_qrf.qrf_no.startswith(f"{prefix}-{year}"):
-    #             # extract last sequence number
-    #             try:
-    #                 last_seq = int(last_qrf.qrf_no.split("-")[-1])
-    #             except ValueError:
-    #                 last_seq = 0
-    #             new_seq = last_seq + 1
-    #         else:
-    #             new_seq = 1
-
-    #         self.qrf_no = f"{prefix}-{year}-{new_seq:04d}"
-
-    #     super().save(*args, **kwargs)
-
-
 
 class QRFBuildingUnit(models.Model):
     """

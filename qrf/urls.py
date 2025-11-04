@@ -1,12 +1,16 @@
-from rest_framework.routers import DefaultRouter
-from .views import *
+from django.urls import path
+from .views import (
+    QRFCreateView,
+    QRFListView,
+    QRFDetailView,
+    QRFUpdateView,
+    QRFDeleteView,
+)
 
-router = DefaultRouter()
-
-router.register("create", QRFViewSet, basename="qrf")
-router.register('list',QRFViewSet, basename="list-qrf")
-router.register("get", QRFViewSet, basename="get-qrf")
-router.register("update", QRFViewSet, basename="update-qrf")
-router.register("delete", QRFViewSet, basename="delete-qrf")
-
-urlpatterns = router.urls
+urlpatterns = [
+    path("create/", QRFCreateView.as_view(), name="qrf-create"),
+    path("list/", QRFListView.as_view(), name="qrf-list"),
+    path("get/<uuid:pk>/", QRFDetailView.as_view(), name="qrf-get"),
+    path("update/<uuid:pk>/", QRFUpdateView.as_view(), name="qrf-update"),
+    path("delete/<uuid:pk>/", QRFDeleteView.as_view(), name="qrf-delete"),
+]

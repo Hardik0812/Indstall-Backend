@@ -1,44 +1,29 @@
-from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
-
-from qrf.utils import initialize_qrf_dependencies
-from .models import *
-from .serializers import *
+from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import viewsets, status
-from utils.response import success_response, error_response
-from django.db import IntegrityError
+from rest_framework import status, permissions
+from django.db import IntegrityError, transaction
 
-class QRFViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+from utils.response import error_response, success_response
+from .models import QRF
+from .serializers import QRFSerializer, QRFListSerializer, QRFCompleteSerializer
+from .utils import initialize_qrf_dependencies
 
-    def get_queryset(self):
-        """Return only QRFs created by the logged-in user."""
-        return QRF.objects.filter(created_by=self.request.user).order_by("-created_at")
 
-    def get_serializer_class(self):
-        """Use lightweight serializer for list action."""
-        if self.action == "list":
-            return QRFListSerializer
-        return QRFSerializer
+class QRFCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
-        return success_response(message="QRFs fetched successfully.", data=serializer.data)
-
-    def create(self, request, *args, **kwargs):
-        payload = request.data.copy()
+    def post(self, request):
+        payload = request.data
         user = request.user
 
+        # ✅ Safely generate unique QRF number
         try:
-            qrf_no = QRF.generate_unique_qrf_no()
+            with transaction.atomic():
+                qrf_no = QRF.generate_unique_qrf_no()
         except Exception as e:
-            return Response(
-                {"success": False, "message": f"Failed to generate QRF number: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return error_response(message="Failed to generate unique QRF number.", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        # ✅ Build QRF data
         serializer = QRFSerializer(data={
             "qrf_no": qrf_no,
             "client_name": payload.get("client_name"),
@@ -52,86 +37,66 @@ class QRFViewSet(viewsets.ModelViewSet):
         })
         serializer.is_valid(raise_exception=True)
 
+        # ✅ Save safely (retry if IntegrityError due to duplicate qrf_no)
         try:
             qrf = serializer.save(created_by=user, updated_by=user)
         except IntegrityError:
-            # Retry once in case two requests overlapped
-            qrf_no = QRF.generate_unique_qrf_no()
-            qrf = serializer.save(created_by=user, updated_by=user, qrf_no=qrf_no)
+            qrf_no = QRF.generate_unique_qrf_no()  # regenerate and retry once
+            serializer.validated_data["qrf_no"] = qrf_no
+            qrf = serializer.save(created_by=user, updated_by=user)
 
-        # Initialize default dependencies
+        # ✅ Initialize all related default dependencies
         initialize_qrf_dependencies(qrf)
 
-        return success_response(
-            message="QRF created successfully.",
-            data=QRFSerializer(qrf).data,
-            status_code=status.HTTP_201_CREATED,
-        )
+        # ✅ Return the newly created record
+        return success_response(message="QRF created successfully.", data=QRFSerializer(qrf).data, status_code=status.HTTP_201_CREATED)
+  
+class QRFListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
-    def retrieve(self, request, pk=None):
-        """
-        Fetch a single QRF with all initialized related tables.
-        """
+    def get(self, request):
+        qrf_list = QRF.objects.filter(created_by=request.user).order_by("-created_at")
+        serializer = QRFListSerializer(qrf_list, many=True)
+        return success_response(message="QRF list fetched successfully.", data=serializer.data)
+
+
+class QRFDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
         try:
-            qrf = self.get_queryset().get(pk=pk)
+            qrf = QRF.objects.get(pk=pk, created_by=request.user)
         except QRF.DoesNotExist:
-            return Response(
-                {"success": False, "message": "QRF not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return error_response(message="QRF not found.", status_code=status.HTTP_404_NOT_FOUND)
 
         serializer = QRFCompleteSerializer(qrf)
-        return success_response(
-            message="QRF details fetched successfully.",
-            data=serializer.data,
-        )
+        return success_response(message="QRF details fetched successfully.", data=serializer.data)
 
-    def partial_update(self, request, pk=None):
-        """
-        PATCH endpoint — updates all sections of the QRF (nested & base).
-        """
+
+class QRFUpdateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
         try:
-            qrf = self.get_queryset().get(pk=pk)
+            qrf = QRF.objects.get(pk=pk, created_by=request.user)
         except QRF.DoesNotExist:
-            return Response(
-                {"success": False, "message": "QRF not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return error_response(message="QRF not found.", status_code=status.HTTP_404_NOT_FOUND)
 
-        serializer = QRFCompleteUpdateSerializer(qrf, data=request.data, partial=True)
+        serializer = QRFSerializer(qrf, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save(updated_by=request.user)
 
-        return success_response(
-            message="QRF updated successfully.",
-            data=serializer.data,
-        )
-    
-    def destroy(self, request, pk=None):
-        """
-        DELETE /api/qrf/<id>/
-        Deletes the specified QRF and all its related child records.
-        """
-        try:
-            with transaction.atomic():
-                qrf = self.get_queryset().get(pk=pk)
-                qrf.delete()
-        except QRF.DoesNotExist:
-            return Response(
-                {"success": False, "message": "QRF not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        except Exception as e:
-            return Response(
-                {"success": False, "message": f"Failed to delete QRF: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return success_response(message="QRF updated successfully.", data=serializer.data)
 
-        return Response(
-            {
-                "success": True,
-                "message": "QRF deleted successfully.",
-                "data": {},
-            },
-            status=status.HTTP_200_OK,
-        )
+
+class QRFDeleteView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            qrf = QRF.objects.get(pk=pk, created_by=request.user)
+            qrf.delete()
+        except QRF.DoesNotExist:
+            return error_response(message="QRF not found.", status_code=status.HTTP_404_NOT_FOUND)
+
+        return success_response(message="QRF deleted successfully.", data={})
