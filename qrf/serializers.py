@@ -440,3 +440,128 @@ class QRFCompleteSerializer(serializers.ModelSerializer):
             "cage_ladders",
             "pipe_rack_trays",
         ]
+
+class QRFCompleteUpdateSerializer(serializers.ModelSerializer):
+    """
+    Used for PATCH /api/qrf/<id>/update-all/ — updates or inserts all related data.
+    """
+    building_units = QRFBuildingUnitSerializer(many=True, required=False)
+    min_thickness_criteria = QRFMinThicknessCriteriaSerializer(many=True, required=False)
+    secondary_details = QRFSecondaryDetailsSerializer(many=True, required=False)
+    base_conditions = QRFBaseConditionSerializer(many=True, required=False)
+    bracing_conditions = QRFBracingConditionSerializer(many=True, required=False)
+    gravity_loadings = QRFGravityLoadingSerializer(many=True, required=False)
+    seismic_loadings = QRFSeismicLoadingSerializer(many=True, required=False)
+    wind_loadings = QRFWindLoadingSerializer(many=True, required=False)
+    additional = QRFBuildingAdditionSerializer(many=True, required=False)
+    sheeting_details = QRFSheetingDetailSerializer(many=True, required=False)
+    canopies = QRFCanopySerializer(many=True, required=False)
+    framed_openings = QRFFramedOpeningSerializer(many=True, required=False)
+    mezzanines = QRFMezzanineSerializer(many=True, required=False)
+    cranes = QRFCraneSerializer(many=True, required=False)
+    fascias = QRFFasciaSerializer(many=True, required=False)
+    partition_walls = QRFPartitionWallSerializer(many=True, required=False)
+    roof_monitors = QRFRoofMonitorSerializer(many=True, required=False)
+    louvers = QRFLouverSerializer(many=True, required=False)
+    safety_life_line_systems = QRFSafetyLifeLineSystemSerializer(many=True, required=False)
+    cage_ladders = QRFCageLadderSerializer(many=True, required=False)
+    pipe_rack_trays = QRFPipeRackCableTraySerializer(many=True, required=False)
+
+    class Meta:
+        model = QRF
+        fields = "__all__"
+
+    def update_nested(self, related_manager, items, unique_field="id"):
+        """Generic nested update for 1-level child models."""
+        existing_objs = {str(obj.id): obj for obj in related_manager.all()}
+        updated_ids = []
+
+        for item in items:
+            item_id = str(item.get(unique_field)) if item.get(unique_field) else None
+            if item_id and item_id in existing_objs:
+                obj = existing_objs[item_id]
+                for k, v in item.items():
+                    if k not in ["id", "qrf", "building_unit", "parameters"]:
+                        setattr(obj, k, v)
+                obj.save()
+                updated_ids.append(item_id)
+            else:
+                related_manager.model.objects.create(qrf=self.instance, **item)
+
+        for obj_id, obj in existing_objs.items():
+            if obj_id not in updated_ids:
+                obj.delete()
+
+    def update_building_units(self, instance, units_data):
+        """Special nested logic for building_units → parameters"""
+        existing_units = {str(u.id): u for u in instance.building_units.all()}
+        updated_unit_ids = []
+
+        for unit in units_data:
+            unit_id = str(unit.get("id")) if unit.get("id") else None
+            parameters = unit.pop("parameters", [])
+
+            if unit_id and unit_id in existing_units:
+                unit_obj = existing_units[unit_id]
+                for k, v in unit.items():
+                    setattr(unit_obj, k, v)
+                unit_obj.save()
+                updated_unit_ids.append(unit_id)
+            else:
+                unit_obj = QRFBuildingUnit.objects.create(qrf=instance, **unit)
+                updated_unit_ids.append(str(unit_obj.id))
+
+            # Update parameters for this unit
+            existing_params = {str(p.id): p for p in unit_obj.parameters.all()}
+            updated_param_ids = []
+
+            for param in parameters:
+                param_id = str(param.get("id")) if param.get("id") else None
+                if param_id and param_id in existing_params:
+                    param_obj = existing_params[param_id]
+                    for k, v in param.items():
+                        if k not in ["id", "building_unit"]:
+                            setattr(param_obj, k, v)
+                    param_obj.save()
+                    updated_param_ids.append(param_id)
+                else:
+                    QRFBuildingParameter.objects.create(building_unit=unit_obj, **param)
+                    updated_param_ids.append(param_id)
+
+            # Delete removed parameters
+            for pid, pobj in existing_params.items():
+                if pid not in updated_param_ids and pid:
+                    pobj.delete()
+
+        # Delete removed units
+        for uid, uobj in existing_units.items():
+            if uid not in updated_unit_ids:
+                uobj.delete()
+
+    def update(self, instance, validated_data):
+        # Non-nested field updates
+        nested_fields = [
+            "building_units", "min_thickness_criteria", "secondary_details",
+            "base_conditions", "bracing_conditions", "gravity_loadings",
+            "seismic_loadings", "wind_loadings", "additional", "sheeting_details",
+            "canopies", "framed_openings", "mezzanines", "cranes", "fascias",
+            "partition_walls", "roof_monitors", "louvers",
+            "safety_life_line_systems", "cage_ladders", "pipe_rack_trays"
+        ]
+
+        for attr, value in validated_data.items():
+            if attr not in nested_fields:
+                setattr(instance, attr, value)
+        instance.save()
+
+        # Handle building_units separately
+        if "building_units" in validated_data:
+            self.update_building_units(instance, validated_data["building_units"])
+
+        # Handle all other nested tables
+        for field in nested_fields:
+            if field in validated_data and field != "building_units":
+                related_manager = getattr(instance, field)
+                self.update_nested(related_manager, validated_data[field])
+
+        return instance

@@ -90,5 +90,23 @@ class QRFViewSet(viewsets.ModelViewSet):
             data=serializer.data,
         )
 
-    def perform_update(self, serializer):
-        serializer.save(updated_by=self.request.user)
+    def partial_update(self, request, pk=None):
+        """
+        PATCH endpoint — updates all sections of the QRF (nested & base).
+        """
+        try:
+            qrf = self.get_queryset().get(pk=pk)
+        except QRF.DoesNotExist:
+            return Response(
+                {"success": False, "message": "QRF not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = QRFCompleteUpdateSerializer(qrf, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+
+        return success_response(
+            message="QRF updated successfully.",
+            data=serializer.data,
+        )
