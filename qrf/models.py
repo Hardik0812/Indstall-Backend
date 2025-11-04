@@ -38,7 +38,7 @@ class QRF(BaseModel):
         help_text="DRAFT / SUBMITTED / APPROVED / REJECTED",
     )
     design_code = models.CharField(max_length=50, blank=True)
-    serviceability_code = models.CharField(max_length=50, blank=True)
+    serviceability_code = models.CharField(max_length=150, blank=True)
     class Meta:
         ordering = ["-created_at"]
 
