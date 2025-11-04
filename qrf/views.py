@@ -106,3 +106,32 @@ class QRFViewSet(viewsets.ModelViewSet):
             message="QRF updated successfully.",
             data=serializer.data,
         )
+    
+    def destroy(self, request, pk=None):
+        """
+        DELETE /api/qrf/<id>/
+        Deletes the specified QRF and all its related child records.
+        """
+        try:
+            with transaction.atomic():
+                qrf = self.get_queryset().get(pk=pk)
+                qrf.delete()
+        except QRF.DoesNotExist:
+            return Response(
+                {"success": False, "message": "QRF not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "message": f"Failed to delete QRF: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            {
+                "success": True,
+                "message": "QRF deleted successfully.",
+                "data": {},
+            },
+            status=status.HTTP_200_OK,
+        )
