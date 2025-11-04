@@ -11,9 +11,7 @@ class QRFViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """
-        Return only QRFs created by the logged-in user, ordered by creation date.
-        """
+        """Return only QRFs created by the logged-in user."""
         return QRF.objects.filter(created_by=self.request.user).order_by("-created_at")
 
     def get_serializer_class(self):
@@ -27,125 +25,70 @@ class QRFViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return success_response(message="QRFs fetched successfully.", data=serializer.data)
 
-    def perform_create(self, serializer):
-        data = serializer.validated_data
-        existing = QRF.objects.filter(
-            name=data.get("name"), created_by=self.request.user
-        ).first()
-        if existing:
-            return existing
+    def create(self, request, *args, **kwargs):
+        """
+        Create a new QRF and auto-generate dependent details.
+        """
+        payload = request.data.copy()
+        user = request.user
 
+        # Auto-generate QRF number (e.g., IND-2025-0001)
+        last_qrf = QRF.objects.order_by("-created_at").first()
+        next_number = 1
+        if last_qrf and last_qrf.qrf_no:
+            try:
+                next_number = int(last_qrf.qrf_no.split("-")[-1]) + 1
+            except Exception:
+                pass
+        current_year = timezone.now().year
+        qrf_no = f"IND-{current_year}-{next_number:04d}"
+
+        # Construct the QRF instance
+        serializer = QRFSerializer(data={
+            "qrf_no": qrf_no,
+            "client_name": payload.get("client_name"),
+            "consultant_name": payload.get("consultant_name"),
+            "sales_engineer": payload.get("sales_engineer"),
+            "sales_region": payload.get("sales_region"),
+            "job_site": payload.get("job_site"),
+            "design_code": payload.get("design_code"),
+            "serviceability_code": payload.get("serviceability_code"),
+            "status": "DRAFT",
+        })
+        serializer.is_valid(raise_exception=True)
+
+        # Save QRF
         qrf = serializer.save(
-            created_by=self.request.user,
-            updated_by=self.request.user,
+            created_by=user,
+            updated_by=user,
         )
+
+        # Initialize dependencies (building units, parameters, etc.)
         initialize_qrf_dependencies(qrf)
+
+        return success_response(
+            message="QRF created successfully.",
+            data=QRFSerializer(qrf).data,
+            status_code=status.HTTP_201_CREATED,
+        )
+
+    def retrieve(self, request, pk=None):
+        """
+        Fetch a single QRF with all nested details.
+        """
+        try:
+            qrf = self.get_queryset().get(pk=pk)
+        except QRF.DoesNotExist:
+            return Response(
+                {"success": False, "message": "QRF not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = QRFSerializer(qrf)
+        return success_response(
+            message="QRF details fetched successfully.",
+            data=serializer.data,
+        )
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
-
-
-class QRFStructuralCriteriaViewSet(viewsets.ModelViewSet):
-    """
-    Saves all MinThickness, Secondary, Base, and Bracing conditions.
-    """
-    permission_classes = [IsAuthenticated]
-    queryset = (
-        QRFMinThicknessCriteria.objects.all()
-        .select_related("qrf")
-    )
-    serializer_class = QRFMinThicknessCriteriaSerializer
-
-
-class QRFGravityLoadingViewSet(viewsets.ModelViewSet):
-    queryset = QRFGravityLoading.objects.all().select_related("qrf")
-    serializer_class = QRFGravityLoadingSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFSeismicLoadingViewSet(viewsets.ModelViewSet):
-    queryset = QRFSeismicLoading.objects.all().select_related("qrf")
-    serializer_class = QRFSeismicLoadingSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFWindLoadingViewSet(viewsets.ModelViewSet):
-    queryset = QRFWindLoading.objects.all().select_related("qrf")
-    serializer_class = QRFWindLoadingSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFBuildingAdditionViewSet(viewsets.ModelViewSet):
-    queryset = QRFBuildingAddition.objects.all().select_related("qrf")
-    serializer_class = QRFBuildingAdditionSerializer
-    permission_classes = [IsAuthenticated]
-
-class QRFSheetingDetailViewSet(viewsets.ModelViewSet):
-    queryset = QRFSheetingDetail.objects.all().select_related("qrf")
-    serializer_class = QRFSheetingDetailSerializer
-    permission_classes = [IsAuthenticated]
-
-class QRFCanopyViewSet(viewsets.ModelViewSet):
-    queryset = QRFCanopy.objects.all().select_related("qrf")
-    serializer_class = QRFCanopySerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFFramedOpeningViewSet(viewsets.ModelViewSet):
-    queryset = QRFFramedOpening.objects.all().select_related("qrf")
-    serializer_class = QRFFramedOpeningSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFMezzanineViewSet(viewsets.ModelViewSet):
-    queryset = QRFMezzanine.objects.all().select_related("qrf")
-    serializer_class = QRFMezzanineSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFCraneViewSet(viewsets.ModelViewSet):
-    queryset = QRFCrane.objects.all().select_related("qrf")
-    serializer_class = QRFCraneSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFFasciaViewSet(viewsets.ModelViewSet):
-    queryset = QRFFascia.objects.all().select_related("qrf")
-    serializer_class = QRFFasciaSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFPartitionWallViewSet(viewsets.ModelViewSet):
-    queryset = QRFPartitionWall.objects.all().select_related("qrf")
-    serializer_class = QRFPartitionWallSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFRoofMonitorViewSet(viewsets.ModelViewSet):
-    queryset = QRFRoofMonitor.objects.all().select_related("qrf")
-    serializer_class = QRFRoofMonitorSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFLouverViewSet(viewsets.ModelViewSet):
-    queryset = QRFLouver.objects.all().select_related("qrf")
-    serializer_class = QRFLouverSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFSafetyLifeLineSystemViewSet(viewsets.ModelViewSet):
-    queryset = QRFSafetyLifeLineSystem.objects.all().select_related("qrf")
-    serializer_class = QRFSafetyLifeLineSystemSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFCageLadderViewSet(viewsets.ModelViewSet):
-    queryset = QRFCageLadder.objects.all().select_related("qrf")
-    serializer_class = QRFCageLadderSerializer
-    permission_classes = [IsAuthenticated]
-
-
-class QRFPipeRackCableTrayViewSet(viewsets.ModelViewSet):
-    queryset = QRFPipeRackCableTray.objects.all().select_related("qrf")
-    serializer_class = QRFPipeRackCableTraySerializer
-    permission_classes = [IsAuthenticated]

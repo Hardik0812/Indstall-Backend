@@ -89,7 +89,7 @@ class QRFBuildingUnitSerializer(serializers.ModelSerializer):
 
 
 class QRFSerializer(serializers.ModelSerializer):
-    building_units = QRFBuildingUnitSerializer(many=True)
+    building_units = QRFBuildingUnitSerializer(many=True, required=False)
 
     class Meta:
         model = QRF
@@ -117,7 +117,9 @@ class QRFSerializer(serializers.ModelSerializer):
             parameters_data = unit_data.pop("parameters", [])
             building_unit = QRFBuildingUnit.objects.create(qrf=qrf, **unit_data)
             for param_data in parameters_data:
-                QRFBuildingParameter.objects.create(building_unit=building_unit, **param_data)
+                QRFBuildingParameter.objects.create(
+                    building_unit=building_unit, **param_data
+                )
         return qrf
 
     def update(self, instance, validated_data):
