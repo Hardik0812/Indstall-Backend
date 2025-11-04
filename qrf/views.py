@@ -7,6 +7,8 @@ from .serializers import *
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 from utils.response import success_response, error_response
+from django.db import IntegrityError
+
 class QRFViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
@@ -26,24 +28,17 @@ class QRFViewSet(viewsets.ModelViewSet):
         return success_response(message="QRFs fetched successfully.", data=serializer.data)
 
     def create(self, request, *args, **kwargs):
-        """
-        Create a new QRF and auto-generate dependent details.
-        """
         payload = request.data.copy()
         user = request.user
 
-        # Auto-generate QRF number (e.g., IND-2025-0001)
-        last_qrf = QRF.objects.order_by("-created_at").first()
-        next_number = 1
-        if last_qrf and last_qrf.qrf_no:
-            try:
-                next_number = int(last_qrf.qrf_no.split("-")[-1]) + 1
-            except Exception:
-                pass
-        current_year = timezone.now().year
-        qrf_no = f"IND-{current_year}-{next_number:04d}"
+        try:
+            qrf_no = QRF.generate_unique_qrf_no()
+        except Exception as e:
+            return Response(
+                {"success": False, "message": f"Failed to generate QRF number: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-        # Construct the QRF instance
         serializer = QRFSerializer(data={
             "qrf_no": qrf_no,
             "client_name": payload.get("client_name"),
@@ -57,13 +52,14 @@ class QRFViewSet(viewsets.ModelViewSet):
         })
         serializer.is_valid(raise_exception=True)
 
-        # Save QRF
-        qrf = serializer.save(
-            created_by=user,
-            updated_by=user,
-        )
+        try:
+            qrf = serializer.save(created_by=user, updated_by=user)
+        except IntegrityError:
+            # Retry once in case two requests overlapped
+            qrf_no = QRF.generate_unique_qrf_no()
+            qrf = serializer.save(created_by=user, updated_by=user, qrf_no=qrf_no)
 
-        # Initialize dependencies (building units, parameters, etc.)
+        # Initialize default dependencies
         initialize_qrf_dependencies(qrf)
 
         return success_response(

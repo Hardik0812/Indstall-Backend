@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator
 from rfq_master.models import Region
 from utils.base_model import BaseModel
-
+from django.db import transaction
 # ---------- QRF Header ----------
 
 
@@ -45,26 +45,55 @@ class QRF(BaseModel):
     def __str__(self) -> str:
         return f"{self.qrf_no} (rev {self.revision})"
 
-    def save(self, *args, **kwargs):
-        if not self.qrf_no:  # only generate first time
-            prefix = "IND"  # or fetch dynamically from settings/region
+    @classmethod
+    def generate_unique_qrf_no(cls):
+        """
+        Generates a unique, sequential QRF number like IND-2025-0004.
+        This is done atomically to avoid duplicates under concurrency.
+        """
+        with transaction.atomic():
             year = timezone.now().year
-            # Count existing QRFs this year to generate sequence
-            last_qrf = QRF.objects.filter(created_at__year=year).order_by("-id").first()
+            prefix = f"IND-{year}-"
 
-            if last_qrf and last_qrf.qrf_no.startswith(f"{prefix}-{year}"):
-                # extract last sequence number
+            # Lock table rows for this query to avoid race conditions
+            last = (
+                cls.objects.select_for_update()
+                .filter(qrf_no__startswith=prefix)
+                .order_by("-created_at")
+                .first()
+            )
+
+            if last and last.qrf_no:
                 try:
-                    last_seq = int(last_qrf.qrf_no.split("-")[-1])
-                except ValueError:
-                    last_seq = 0
-                new_seq = last_seq + 1
+                    last_number = int(last.qrf_no.split("-")[-1])
+                except Exception:
+                    last_number = 0
             else:
-                new_seq = 1
+                last_number = 0
 
-            self.qrf_no = f"{prefix}-{year}-{new_seq:04d}"
+            next_number = last_number + 1
+            return f"{prefix}{next_number:04d}"
+        
+    # def save(self, *args, **kwargs):
+    #     if not self.qrf_no:  # only generate first time
+    #         prefix = "IND"  # or fetch dynamically from settings/region
+    #         year = timezone.now().year
+    #         # Count existing QRFs this year to generate sequence
+    #         last_qrf = QRF.objects.filter(created_at__year=year).order_by("-id").first()
 
-        super().save(*args, **kwargs)
+    #         if last_qrf and last_qrf.qrf_no.startswith(f"{prefix}-{year}"):
+    #             # extract last sequence number
+    #             try:
+    #                 last_seq = int(last_qrf.qrf_no.split("-")[-1])
+    #             except ValueError:
+    #                 last_seq = 0
+    #             new_seq = last_seq + 1
+    #         else:
+    #             new_seq = 1
+
+    #         self.qrf_no = f"{prefix}-{year}-{new_seq:04d}"
+
+    #     super().save(*args, **kwargs)
 
 
 
