@@ -236,12 +236,30 @@ class UsersListView(APIView):
         )
 
 class SalesEngineerListView(generics.ListAPIView):
+    """
+    List all users belonging to the 'Sales' group.
+    """
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated] 
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        """
+        Return only users in the 'Sales' group.
+        """
         try:
             sales_group = Group.objects.get(name="Sales")
             return User.objects.filter(groups=sales_group)
         except Group.DoesNotExist:
             return User.objects.none()
+
+    def list(self, request, *args, **kwargs):
+        """
+        Override to send a custom response format.
+        """
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return success_response(
+           data=serializer.data,
+           message="Sales engineers fetched successfully.",
+           status_code=status.HTTP_200_OK,
+        )

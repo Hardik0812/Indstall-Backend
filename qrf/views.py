@@ -6,7 +6,7 @@ from .models import *
 from .serializers import *
 from rest_framework.response import Response
 from rest_framework import viewsets, status
-
+from utils.response import success_response, error_response
 class QRFViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
@@ -25,7 +25,7 @@ class QRFViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
-        return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
+        return success_response(message="QRFs fetched successfully.", data=serializer.data)
 
     def perform_create(self, serializer):
         data = serializer.validated_data
