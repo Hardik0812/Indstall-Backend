@@ -25,7 +25,31 @@ from .models import (
     QRFPipeRackCableTray,
 )
 
+class QRFListSerializer(serializers.ModelSerializer):
+    sales_engineer = serializers.SerializerMethodField()
+    sales_region = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = QRF
+        fields = [
+            "id",
+            "qrf_no",
+            "client_name",
+            "consultant_name",
+            "sales_engineer",
+            "sales_region",
+            "job_site",
+            "status",
+        ]
 
+    def get_sales_engineer(self, obj):
+        """Return sales engineer's full name or username."""
+        return getattr(obj.sales_engineer, "first_name", None) or getattr(obj.sales_engineer, "full_name", None) or getattr(obj.sales_engineer, "username", None)
+
+    def get_sales_region(self, obj):
+        """Return region name if available."""
+        return getattr(obj.sales_region, "name", None)
+    
 class QRFBuildingParameterSerializer(serializers.ModelSerializer):
     class Meta:
         model = QRFBuildingParameter
@@ -351,27 +375,68 @@ class QRFPipeRackCableTraySerializer(serializers.ModelSerializer):
             "qrf",
         ]
 
-class QRFListSerializer(serializers.ModelSerializer):
-    sales_engineer = serializers.SerializerMethodField()
-    sales_region = serializers.SerializerMethodField()
-    
+class QRFCompleteSerializer(serializers.ModelSerializer):
+    """
+    Full QRF serializer that includes all related tables
+    (building units, parameters, criteria, loadings, etc.)
+    """
+
+    building_units = QRFBuildingUnitSerializer(many=True, read_only=True)
+    min_thickness_criteria = QRFMinThicknessCriteriaSerializer(many=True, read_only=True)
+    secondary_details = QRFSecondaryDetailsSerializer(many=True, read_only=True)
+    base_conditions = QRFBaseConditionSerializer(many=True, read_only=True)
+    bracing_conditions = QRFBracingConditionSerializer(many=True, read_only=True)
+    gravity_loadings = QRFGravityLoadingSerializer(many=True, read_only=True)
+    seismic_loadings = QRFSeismicLoadingSerializer(many=True, read_only=True)
+    wind_loadings = QRFWindLoadingSerializer(many=True, read_only=True)
+    additional = QRFBuildingAdditionSerializer(many=True, read_only=True)
+    sheeting_details = QRFSheetingDetailSerializer(many=True, read_only=True)
+    canopies = QRFCanopySerializer(many=True, read_only=True)
+    framed_openings = QRFFramedOpeningSerializer(many=True, read_only=True)
+    mezzanines = QRFMezzanineSerializer(many=True, read_only=True)
+    cranes = QRFCraneSerializer(many=True, read_only=True)
+    fascias = QRFFasciaSerializer(many=True, read_only=True)
+    partition_walls = QRFPartitionWallSerializer(many=True, read_only=True)
+    roof_monitors = QRFRoofMonitorSerializer(many=True, read_only=True)
+    louvers = QRFLouverSerializer(many=True, read_only=True)
+    safety_life_line_systems = QRFSafetyLifeLineSystemSerializer(many=True, read_only=True)
+    cage_ladders = QRFCageLadderSerializer(many=True, read_only=True)
+    pipe_rack_trays = QRFPipeRackCableTraySerializer(many=True, read_only=True)
+
     class Meta:
         model = QRF
         fields = [
             "id",
             "qrf_no",
+            "revision",
+            "revision_date",
             "client_name",
             "consultant_name",
             "sales_engineer",
             "sales_region",
             "job_site",
             "status",
+            "design_code",
+            "serviceability_code",
+            "building_units",
+            "min_thickness_criteria",
+            "secondary_details",
+            "base_conditions",
+            "bracing_conditions",
+            "gravity_loadings",
+            "seismic_loadings",
+            "wind_loadings",
+            "additional",
+            "sheeting_details",
+            "canopies",
+            "framed_openings",
+            "mezzanines",
+            "cranes",
+            "fascias",
+            "partition_walls",
+            "roof_monitors",
+            "louvers",
+            "safety_life_line_systems",
+            "cage_ladders",
+            "pipe_rack_trays",
         ]
-
-    def get_sales_engineer(self, obj):
-        """Return sales engineer's full name or username."""
-        return getattr(obj.sales_engineer, "first_name", None) or getattr(obj.sales_engineer, "full_name", None) or getattr(obj.sales_engineer, "username", None)
-
-    def get_sales_region(self, obj):
-        """Return region name if available."""
-        return getattr(obj.sales_region, "name", None)

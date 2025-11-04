@@ -74,7 +74,7 @@ class QRFViewSet(viewsets.ModelViewSet):
 
     def retrieve(self, request, pk=None):
         """
-        Fetch a single QRF with all nested details.
+        Fetch a single QRF with all initialized related tables.
         """
         try:
             qrf = self.get_queryset().get(pk=pk)
@@ -84,7 +84,7 @@ class QRFViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        serializer = QRFSerializer(qrf)
+        serializer = QRFCompleteSerializer(qrf)
         return success_response(
             message="QRF details fetched successfully.",
             data=serializer.data,
