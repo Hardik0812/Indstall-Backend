@@ -4,16 +4,41 @@ from rest_framework.permissions import IsAuthenticated
 from qrf.utils import initialize_qrf_dependencies
 from .models import *
 from .serializers import *
-
-
+from rest_framework.response import Response
+from rest_framework import viewsets, status
 
 class QRFViewSet(viewsets.ModelViewSet):
-    queryset = QRF.objects.all().prefetch_related("building_units__parameters")
-    serializer_class = QRFSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        """
+        Return only QRFs created by the logged-in user, ordered by creation date.
+        """
+        return QRF.objects.filter(created_by=self.request.user).order_by("-created_at")
+
+    def get_serializer_class(self):
+        """Use lightweight serializer for list action."""
+        if self.action == "list":
+            return QRFListSerializer
+        return QRFSerializer
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
+
     def perform_create(self, serializer):
-        qrf = serializer.save(created_by=self.request.user, updated_by=self.request.user)
+        data = serializer.validated_data
+        existing = QRF.objects.filter(
+            name=data.get("name"), created_by=self.request.user
+        ).first()
+        if existing:
+            return existing
+
+        qrf = serializer.save(
+            created_by=self.request.user,
+            updated_by=self.request.user,
+        )
         initialize_qrf_dependencies(qrf)
 
     def perform_update(self, serializer):

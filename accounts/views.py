@@ -22,8 +22,9 @@ from .serializers import (
     LoginSerializer,
     User,
     UserListSerializer,
+    UserSerializer,
 )
-
+from rest_framework import generics, permissions
 
 class GroupListView(APIView):
     """
@@ -233,3 +234,14 @@ class UsersListView(APIView):
             data=payload,
             status_code=status.HTTP_200_OK,
         )
+
+class SalesEngineerListView(generics.ListAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated] 
+
+    def get_queryset(self):
+        try:
+            sales_group = Group.objects.get(name="Sales")
+            return User.objects.filter(groups=sales_group)
+        except Group.DoesNotExist:
+            return User.objects.none()

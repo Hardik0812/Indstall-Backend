@@ -348,3 +348,28 @@ class QRFPipeRackCableTraySerializer(serializers.ModelSerializer):
             "remarks",
             "qrf",
         ]
+
+class QRFListSerializer(serializers.ModelSerializer):
+    sales_engineer = serializers.SerializerMethodField()
+    sales_region = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = QRF
+        fields = [
+            "id",
+            "qrf_no",
+            "client_name",
+            "consultant_name",
+            "sales_engineer",
+            "sales_region",
+            "job_site",
+            "status",
+        ]
+
+    def get_sales_engineer(self, obj):
+        """Return sales engineer's full name or username."""
+        return getattr(obj.sales_engineer, "first_name", None) or getattr(obj.sales_engineer, "full_name", None) or getattr(obj.sales_engineer, "username", None)
+
+    def get_sales_region(self, obj):
+        """Return region name if available."""
+        return getattr(obj.sales_region, "name", None)

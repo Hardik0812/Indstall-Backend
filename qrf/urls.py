@@ -3,7 +3,8 @@ from .views import *
 
 router = DefaultRouter()
 
-router.register("qrf", QRFViewSet, basename="qrf")
+router.register("create-qrf", QRFViewSet, basename="qrf")
+router.register('list',QRFViewSet, basename="qrf-list")
 router.register("min-thickness", QRFStructuralCriteriaViewSet, basename="min-thickness")
 router.register("gravity-loading", QRFGravityLoadingViewSet, basename="gravity-loading")
 router.register("seismic-loading", QRFSeismicLoadingViewSet, basename="seismic-loading")

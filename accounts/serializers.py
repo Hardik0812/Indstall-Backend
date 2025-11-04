@@ -128,3 +128,12 @@ class UserListSerializer(serializers.ModelSerializer):
 
     def get_groups(self, obj):
         return list(obj.groups.values_list("name", flat=True))
+
+
+
+class UserSerializer(serializers.ModelSerializer):
+    groups = serializers.StringRelatedField(many=True)  
+
+    class Meta:
+        model = User
+        fields = ["id", "email", "full_name", "groups"]

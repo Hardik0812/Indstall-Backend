@@ -287,7 +287,7 @@ class QRFGravityLoading(models.Model):
 
 
     def __str__(self):
-        return f"{self.name} - {self.get_dropdown_display()} ({self.qrf.qrf_no})"
+        return f"{self.name} - ({self.qrf.qrf_no})"
     
 
 class QRFBuildingAddition(models.Model):
@@ -297,7 +297,7 @@ class QRFBuildingAddition(models.Model):
     value = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"{self.name} - {self.get_dropdown_display()} ({self.qrf.qrf_no})"
+        return f"{self.name} - ({self.qrf.qrf_no})"
     
 class QRFSheetingDetail(models.Model):
     """

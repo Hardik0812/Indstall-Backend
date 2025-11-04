@@ -6,6 +6,7 @@ from accounts.views import (
     InviteUserView,
     LoginView,
     LogoutView,
+    SalesEngineerListView,
     UsersListView,
 )
 from accounts.views_refresh import TokenRefreshWithUserView
@@ -22,4 +23,5 @@ urlpatterns = [
     path(f"groups/", GroupListView.as_view(), name="groups"),
     path(f"invite/user/", InviteUserView.as_view(), name="invite_user"),
     path("users/", UsersListView.as_view(), name="users_list"),  # ← add
+    path("sales-engineers/", SalesEngineerListView.as_view(), name="sales-engineers"),
 ]
