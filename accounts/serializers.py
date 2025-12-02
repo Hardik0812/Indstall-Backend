@@ -86,7 +86,6 @@ class InviteUserSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         # resolve and stash the Group instance for use in create()
-        
         attrs["_group_obj"] = self._resolve_group(attrs["group"])
         return attrs
 

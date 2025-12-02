@@ -8,6 +8,7 @@ from django.core.validators import MinValueValidator
 from rfq_master.models import Region
 from utils.base_model import BaseModel
 from django.db import transaction
+from django.db.models.functions import Substr, Cast
 # ---------- QRF Header ----------
 
 
@@ -49,31 +50,33 @@ class QRF(BaseModel):
     def generate_unique_qrf_no(cls):
         """
         Generates a unique sequential QRF number like IND-2025-0001.
-        Safe against concurrency using select_for_update().
+        Fully concurrency-safe.
         """
         with transaction.atomic():
             current_year = timezone.now().year
             prefix = f"IND-{current_year}-"
+            prefix_length = len(prefix) + 1  # position where the number starts
 
-            # Lock table for this prefix so no two transactions overlap
+            # Get last used number by extracting numeric suffix
             last_qrf = (
-                cls.objects.select_for_update()
+                cls.objects
+                .select_for_update()
                 .filter(qrf_no__startswith=prefix)
-                .order_by("-created_at")
+                .annotate(
+                    num_part=Cast(
+                        Substr("qrf_no", prefix_length),
+                        models.IntegerField()
+                    )
+                )
+                .order_by("-num_part")
                 .first()
             )
 
-            if last_qrf and last_qrf.qrf_no:
-                try:
-                    last_number = int(last_qrf.qrf_no.split("-")[-1])
-                except Exception:
-                    last_number = 0
-            else:
-                last_number = 0
-
+            last_number = last_qrf.num_part if last_qrf else 0
             next_number = last_number + 1
+            print("next_number",next_number)
             return f"{prefix}{next_number:04d}"
-        
+                
 
 class QRFBuildingUnit(models.Model):
     """

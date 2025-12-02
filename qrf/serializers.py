@@ -136,7 +136,17 @@ class QRFSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         building_units_data = validated_data.pop("building_units", [])
+
+        # Pull auto-generated qrf_no from serializer instance (set in view)
+        qrf_no = getattr(self, "qrf_no", None)
+        if not qrf_no:
+            raise ValueError("qrf_no must be set before saving QRF")
+
+        # Inject qrf_no manually into validated_data
+        validated_data["qrf_no"] = qrf_no
+
         qrf = QRF.objects.create(**validated_data)
+
         for unit_data in building_units_data:
             parameters_data = unit_data.pop("parameters", [])
             building_unit = QRFBuildingUnit.objects.create(qrf=qrf, **unit_data)
@@ -144,6 +154,7 @@ class QRFSerializer(serializers.ModelSerializer):
                 QRFBuildingParameter.objects.create(
                     building_unit=building_unit, **param_data
                 )
+
         return qrf
 
     def update(self, instance, validated_data):

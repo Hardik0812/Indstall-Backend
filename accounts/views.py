@@ -15,7 +15,7 @@ from utils.pagination import (
     validate_ordering,
     paginate_queryset,
 )
-from django.db.models import Q
+
 from .serializers import (
     GroupSerializer,
     InviteUserSerializer,
@@ -110,7 +110,6 @@ class InviteUserView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        
         serializer = InviteUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 

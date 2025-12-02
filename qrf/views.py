@@ -75,6 +75,7 @@ class QRFCreateView(APIView):
                 else:
                     # Create basic QRF and initialize with defaults
                     serializer = QRFSerializer(data=payload)
+                    serializer.qrf_no = qrf_no
                     serializer.is_valid(raise_exception=True)
                     qrf = serializer.save(created_by=user, updated_by=user)
                     initialize_qrf_dependencies(qrf)
