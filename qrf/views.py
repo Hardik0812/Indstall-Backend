@@ -9,7 +9,18 @@ from django.conf import settings
 from io import BytesIO
 from xhtml2pdf import pisa
 from utils.response import error_response, success_response
-from .models import QRF
+from .models import (
+    QRF,
+    QRFBuildingUnit,
+    QRFBuildingParameter,
+    QRFMinThicknessCriteria,
+    QRFSecondaryDetails,
+    QRFBaseCondition,
+    QRFBracingCondition,
+    QRFGravityLoading,
+    QRFSeismicLoading,
+    QRFWindLoading,
+)
 from .serializers import (
     QRFSerializer, 
     QRFListSerializer, 
@@ -244,83 +255,153 @@ class QRFGeneratePDFView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
-
-        # ---------------------------
-        # 1️⃣ Fetch QRF
-        # ---------------------------
         try:
-            qrf = QRF.objects.select_related('sales_engineer', 'sales_region').get(
-                pk=pk,
-                created_by=request.user
+            # ---------------------------
+            # 1️⃣ Fetch QRF
+            # ---------------------------
+            try:
+                from django.db.models import Prefetch
+                
+                qrf = QRF.objects.select_related('sales_engineer', 'sales_region').prefetch_related(
+                    Prefetch('building_units', queryset=QRFBuildingUnit.objects.order_by('order', 'id')),
+                    Prefetch('building_units__parameters', queryset=QRFBuildingParameter.objects.order_by('id')),
+                    Prefetch('min_thickness_criteria', queryset=QRFMinThicknessCriteria.objects.order_by('id')),
+                    Prefetch('secondary_details', queryset=QRFSecondaryDetails.objects.order_by('id')),
+                    Prefetch('base_conditions', queryset=QRFBaseCondition.objects.order_by('id')),
+                    Prefetch('bracing_conditions', queryset=QRFBracingCondition.objects.order_by('id')),
+                    Prefetch('gravity_loadings', queryset=QRFGravityLoading.objects.order_by('id')),
+                    Prefetch('seismic_loadings', queryset=QRFSeismicLoading.objects.order_by('id')),
+                    Prefetch('wind_loadings', queryset=QRFWindLoading.objects.order_by('id'))
+                ).get(
+                    pk=pk,
+                    created_by=request.user
+                )
+            except QRF.DoesNotExist:
+                return error_response(
+                    message="QRF not found.",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+
+            # ---------------------------
+            # 2️⃣ Extract related values
+            # ---------------------------
+            sales_engineer_name = (
+                getattr(qrf.sales_engineer, "first_name", None)
+                or getattr(qrf.sales_engineer, "full_name", None)
+                or getattr(qrf.sales_engineer, "username", None)
+                or "N/A"
             )
-        except QRF.DoesNotExist:
-            return error_response(
-                message="QRF not found.",
-                status_code=status.HTTP_404_NOT_FOUND
+
+            sales_region_name = getattr(qrf.sales_region, "name", None) or "N/A"
+
+            # Use file:// protocol for xhtml2pdf to properly load local images
+            logo_full_path = os.path.join(
+                settings.BASE_DIR,
+                "qrf",
+                "static",
+                "images",
+                "indstaal_logo.png"
             )
+            
+            # Verify file exists
+            if not os.path.isfile(logo_full_path):
+                print(f"⚠️ Logo file not found at: {logo_full_path}")
+                logo_path = ""
+            else:
+                logo_path = "file://" + logo_full_path
+                print(f"✅ Logo path: {logo_path}")
 
-        # ---------------------------
-        # 2️⃣ Extract related values
-        # ---------------------------
-        sales_engineer_name = (
-            getattr(qrf.sales_engineer, "first_name", None)
-            or getattr(qrf.sales_engineer, "full_name", None)
-            or getattr(qrf.sales_engineer, "username", None)
-            or "N/A"
-        )
+            # ---------------------------
+            # 3️⃣ Prepare context
+            # ---------------------------
+            context = {
+                "qrf": qrf,
+                "sales_engineer_name": sales_engineer_name,
+                "sales_region_name": sales_region_name,
+                "generated_date": timezone.now().strftime("%B %d, %Y %I:%M %p"),
+                "logo_path": logo_path,   # absolute path for PDF images
+            }
 
-        sales_region_name = getattr(qrf.sales_region, "name", None) or "N/A"
+            # ---------------------------
+            # 4️⃣ Render HTML template
+            # ---------------------------
+            try:
+                # Use simplified template compatible with xhtml2pdf (no flexbox/grid)
+                html_string = render_to_string("qrf/pdf_template_simple.html", context)
+                print("✅ Template rendered successfully")
+            except Exception as template_error:
+                print(f"❌ Template rendering error: {template_error}")
+                raise
 
-        # Important: full absolute path for xhtml2pdf
-        logo_path = os.path.join(
-            settings.BASE_DIR,
-            "qrf",
-            "static",
-            "images",
-            "indstaal_logo.png"
-        )
+            # ---------------------------
+            # 5️⃣ Convert to PDF (xhtml2pdf)
+            # ---------------------------
+            pdf_buffer = BytesIO()
+            try:
+                # Save HTML for debugging
+                debug_path = os.path.join(settings.BASE_DIR, 'debug_qrf.html')
+                with open(debug_path, 'w', encoding='utf-8') as f:
+                    f.write(html_string)
+                print(f"✅ HTML saved to {debug_path}")
+                
+                # Suppress warnings and capture errors
+                import logging
+                logging.getLogger('xhtml2pdf').setLevel(logging.ERROR)
+                
+                pisa_status = pisa.CreatePDF(
+                    html_string,
+                    dest=pdf_buffer,
+                    link_callback=self.link_callback,
+                    encoding='utf-8'
+                )
+                print("✅ PDF created successfully")
+                
+                # Check for pisa errors
+                if pisa_status.err:
+                    print(f"⚠️ Pisa errors: {pisa_status.err}")
+                    
+            except TypeError as type_error:
+                # This is the NoneType comparison error
+                print(f"❌ TypeError in PDF creation: {type_error}")
+                import traceback
+                full_trace = traceback.format_exc()
+                print(full_trace)
+                
+                # Try to identify which part of the template is causing issues
+                raise Exception(f"PDF generation failed due to data type issue. This usually happens when numeric fields contain None values. Error: {type_error}")
+                    
+            except Exception as pdf_error:
+                print(f"❌ PDF creation error: {pdf_error}")
+                import traceback
+                traceback.print_exc()
+                raise
 
-        # ---------------------------
-        # 3️⃣ Prepare context
-        # ---------------------------
-        context = {
-            "qrf": qrf,
-            "sales_engineer_name": sales_engineer_name,
-            "sales_region_name": sales_region_name,
-            "generated_date": timezone.now().strftime("%B %d, %Y %I:%M %p"),
-            "logo_path": logo_path,   # absolute path for PDF images
-        }
+            if pisa_status.err:
+                return error_response(
+                    message="Failed to generate PDF.",
+                    status_code=500
+                )
 
-        # ---------------------------
-        # 4️⃣ Render HTML template
-        # ---------------------------
-        html_string = render_to_string("qrf/pdf_template.html", context)
+            pdf_value = pdf_buffer.getvalue()
 
-        # ---------------------------
-        # 5️⃣ Convert to PDF (xhtml2pdf)
-        # ---------------------------
-        pdf_buffer = BytesIO()
-        pisa_status = pisa.CreatePDF(
-            html_string,
-            dest=pdf_buffer,
-            link_callback=self.link_callback  # handles static & media files
-        )
+            # ---------------------------
+            # 6️⃣ Return PDF inline
+            # ---------------------------
+            response = HttpResponse(pdf_value, content_type="application/pdf")
+            response["Content-Disposition"] = f'inline; filename="QRF_{qrf.qrf_no}.pdf"'
 
-        if pisa_status.err:
+            return response
+        
+        except Exception as e:
+            # Catch any errors during PDF generation
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f"PDF Generation Error: {error_detail}")
             return error_response(
-                message="Failed to generate PDF.",
+                message=f"Failed to generate PDF: {str(e)}",
+                data={"detail": str(e)},
                 status_code=500
             )
-
-        pdf_value = pdf_buffer.getvalue()
-
-        # ---------------------------
-        # 6️⃣ Return PDF inline
-        # ---------------------------
-        response = HttpResponse(pdf_value, content_type="application/pdf")
-        response["Content-Disposition"] = f'inline; filename="QRF_{qrf.qrf_no}.pdf"'
-
-        return response
 
     # ------------------------------------------------
     # 🔧 Required for images/static paths in PDF
@@ -331,12 +412,19 @@ class QRFGeneratePDFView(APIView):
         Handles STATIC and MEDIA files.
         """
 
+        # Handle file:// protocol
+        if uri.startswith("file://"):
+            path = uri.replace("file://", "")
+            if os.path.isfile(path):
+                return path
+            raise Exception(f"File not found: {path}")
+
         # Static files
-        static_root = settings.STATIC_ROOT
+        static_root = settings.STATIC_ROOT or os.path.join(settings.BASE_DIR, "static")
         static_url = settings.STATIC_URL
 
         # Media files
-        media_root = settings.MEDIA_ROOT
+        media_root = settings.MEDIA_ROOT or os.path.join(settings.BASE_DIR, "media")
         media_url = settings.MEDIA_URL
 
         if uri.startswith(media_url):

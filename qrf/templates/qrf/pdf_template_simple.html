@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>QRF - {{ qrf.qrf_no }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+        
+        @page {
+            size: A4 landscape;
+            margin: 10mm;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10px;
+            line-height: 1.4;
+            color: #000;
+        }
+        
+        /* Header - using table instead of flexbox */
+        .header-table {
+            width: 100%;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #000;
+        }
+        
+        .logo {
+            width: 180px;
+            height: auto;
+        }
+        
+        .title-section {
+            text-align: right;
+            vertical-align: top;
+        }
+        
+        .title-section h1 {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+        
+        .title-section p {
+            font-size: 11px;
+            color: #333;
+        }
+        
+        /* Info Table */
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            border: 2px solid #000;
+        }
+        
+        .info-table td {
+            padding: 6px 8px;
+            border: 1px solid #000;
+            font-size: 10px;
+        }
+        
+        .info-table td.label {
+            font-weight: bold;
+            background-color: #f5f5f5;
+            width: 18%;
+        }
+        
+        .info-table td.value {
+            width: 32%;
+        }
+        
+        /* Section Headers */
+        .section-header {
+            background-color: #FDB913;
+            color: #000;
+            font-weight: bold;
+            font-size: 12px;
+            padding: 8px 10px;
+            text-align: center;
+            border: 2px solid #000;
+            margin-top: 15px;
+            margin-bottom: 5px;
+        }
+        
+        /* Building Description Table */
+        .building-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            border: 2px solid #000;
+        }
+        
+        .building-table th,
+        .building-table td {
+            border: 1px solid #000;
+            padding: 6px 8px;
+            font-size: 9px;
+            text-align: center;
+        }
+        
+        .building-table th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+        
+        .building-table td.param-label {
+            text-align: left;
+            font-weight: bold;
+            background-color: #f9f9f9;
+        }
+        
+
+        
+        /* Design Loads Table */
+        .loads-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 2px solid #000;
+        }
+        
+        .loads-table th,
+        .loads-table td {
+            border: 1px solid #000;
+            padding: 6px 8px;
+            font-size: 9px;
+        }
+        
+        .loads-table th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+            text-align: left;
+            padding-left: 8px;
+        }
+        
+        .loads-table td.load-label {
+            font-weight: bold;
+            background-color: #f9f9f9;
+            text-align: left;
+        }
+        
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 8px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header with Logo and Title - using table instead of flexbox -->
+    <table class="header-table">
+        <tr>
+            <td style="width: 50%;">
+                <img src="{{ logo_path }}" alt="INDSTAAL Logo" class="logo">
+            </td>
+            <td class="title-section">
+                <h1>Quote Request Form (QRF)</h1>
+                <p>{{ qrf.qrf_no }}</p>
+            </td>
+        </tr>
+    </table>
+    
+    <!-- Basic Information Table -->
+    <table class="info-table">
+        <tr>
+            <td class="label">QRF no. :</td>
+            <td class="value">{{ qrf.qrf_no }}</td>
+            <td class="label">Sales Engineer :</td>
+            <td class="value">{{ sales_engineer_name }}</td>
+            <td class="label">Revision :</td>
+            <td class="value">{{ qrf.revision }}</td>
+        </tr>
+        <tr>
+            <td class="label">Name of Client :</td>
+            <td class="value">{{ qrf.client_name }}</td>
+            <td class="label">Sales Region :</td>
+            <td class="value">{{ sales_region_name }}</td>
+            <td class="label">Date of Revision :</td>
+            <td class="value">{{ qrf.revision_date|default:"N/A" }}</td>
+        </tr>
+        <tr>
+            <td class="label">Name of Consultant :</td>
+            <td class="value">{{ qrf.consultant_name|default:"N/A" }}</td>
+            <td class="label">Job Site :</td>
+            <td class="value">{{ qrf.job_site|default:"N/A" }}</td>
+            <td class="label"></td>
+            <td class="value"></td>
+        </tr>
+    </table>
+    
+    <!-- Building Description Section -->
+    <table style="width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 10px;">
+        <tr>
+            <td colspan="6" style="background-color: #FDB913; color: #000; font-weight: bold; font-size: 12px; padding: 10px; text-align: center; border: 2px solid #000;">Building Description</td>
+        </tr>
+    </table>
+    
+    <table class="info-table" style="margin-bottom: 10px; margin-top: 0;">
+        <tr>
+            <td class="label" style="vertical-align: middle; width: 15%;">Design Code</td>
+            <td class="value" style="vertical-align: middle; width: 18%;">{{ qrf.design_code|default:"N/A" }}</td>
+            <td class="label" style="vertical-align: middle; width: 17%;">Serviceability Code</td>
+            <td class="value" style="vertical-align: middle; width: 18%;">{{ qrf.serviceability_code|default:"N/A" }}</td>
+            <td class="label" style="width: 16%;"></td>
+            <td class="value" style="width: 16%;"></td>
+        </tr>
+    </table>
+    
+    <table class="building-table">
+        <thead>
+            <tr>
+                <th rowspan="2" style="width: 20%;">Building Parameters</th>
+                <th colspan="3">Main Building</th>
+                <th colspan="3">Lean To Shed - 1</th>
+                <th colspan="3">Lean To Shed - 2</th>
+            </tr>
+            <tr>
+                <th>Dimension</th>
+                <th>Unit</th>
+                <th>End condition</th>
+                <th>Dimension</th>
+                <th>Unit</th>
+                <th>End condition</th>
+                <th>Dimension</th>
+                <th>Unit</th>
+                <th>End condition</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="param-label">Frame type</td>
+                <td colspan="3">RF</td>
+                <td colspan="3">Lean To</td>
+                <td colspan="3">Lean To</td>
+            </tr>
+            <tr>
+                <td class="param-label">Width (m)</td>
+                <td>-</td>
+                <td>meter</td>
+                <td>C/C of Col</td>
+                <td>-</td>
+                <td>meter</td>
+                <td>C/C of Col</td>
+                <td>-</td>
+                <td>meter</td>
+                <td>C/C of Col</td>
+            </tr>
+            <tr>
+                <td class="param-label">Length (m)</td>
+                <td>-</td>
+                <td>meter</td>
+                <td>C/C of Col</td>
+                <td>-</td>
+                <td>meter</td>
+                <td>C/C of Col</td>
+                <td>-</td>
+                <td>meter</td>
+                <td>C/C of Col</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <!-- Other Building Details Section -->
+    <table style="width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 10px;">
+        <tr>
+            <td style="background-color: #FDB913; color: #000; font-weight: bold; font-size: 12px; padding: 10px; text-align: center; border: 2px solid #000;">Other building details</td>
+        </tr>
+    </table>
+    
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 2px solid #000;">
+        <tr>
+            <th style="width: 25%; background-color: #e0e0e0; font-weight: bold; padding: 6px 8px; text-align: left; border: 1px solid #000; font-size: 10px; vertical-align: middle;">Min Thickness Criteria</th>
+            <th style="width: 25%; background-color: #e0e0e0; font-weight: bold; padding: 6px 8px; text-align: left; border: 1px solid #000; font-size: 10px; vertical-align: middle;">Secondary details</th>
+            <th style="width: 25%; background-color: #e0e0e0; font-weight: bold; padding: 6px 8px; text-align: left; border: 1px solid #000; font-size: 10px; vertical-align: middle;">Base condition</th>
+            <th style="width: 25%; background-color: #e0e0e0; font-weight: bold; padding: 6px 8px; text-align: left; border: 1px solid #000; font-size: 10px; vertical-align: middle;">Bracing condition</th>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #000; padding: 8px; vertical-align: top; font-size: 9px; text-align: left;">
+                <div style="margin-bottom: 5px;"><strong>B/U Web:</strong> As per design</div>
+                <div><strong>B/U Flange:</strong> As per design</div>
+            </td>
+            <td style="border: 1px solid #000; padding: 8px; vertical-align: top; font-size: 9px; text-align: left;">
+                <div style="margin-bottom: 5px;"><strong>Purlin spacing:</strong> As per design</div>
+                <div><strong>Girt spacing:</strong> -</div>
+            </td>
+            <td style="border: 1px solid #000; padding: 8px; vertical-align: top; font-size: 9px; text-align: left;">
+                <div style="margin-bottom: 5px;"><strong>Main Col bases:</strong> As per design</div>
+                <div><strong>CB Col bases:</strong> As per design</div>
+            </td>
+            <td style="border: 1px solid #000; padding: 8px; vertical-align: top; font-size: 9px; text-align: left;">
+                <div style="margin-bottom: 5px;"><strong>Roof member:</strong> As per design</div>
+                <div><strong>Wall member:</strong> As per design</div>
+            </td>
+        </tr>
+    </table>
+    
+    <!-- Design Loads Section -->
+    <table style="width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 10px;">
+        <tr>
+            <td style="background-color: #FDB913; color: #000; font-weight: bold; font-size: 12px; padding: 10px; text-align: center; border: 2px solid #000;">Design Loads</td>
+        </tr>
+    </table>
+    
+    <table style="width: 100%; border-collapse: collapse; border: 2px solid #000;">
+        <thead>
+            <tr>
+                <th colspan="4" style="background-color: #f0f0f0; font-weight: bold; text-align: left; padding: 6px 8px; border: 1px solid #000; font-size: 9px; vertical-align: middle;">Gravity Loading</th>
+                <th colspan="2" style="background-color: #f0f0f0; font-weight: bold; text-align: left; padding: 6px 8px; border: 1px solid #000; font-size: 9px; vertical-align: middle;">Seismic Loading</th>
+                <th colspan="2" style="background-color: #f0f0f0; font-weight: bold; text-align: left; padding: 6px 8px; border: 1px solid #000; font-size: 9px; vertical-align: middle;">Wind Loading</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="font-weight: bold; background-color: #f9f9f9; text-align: left; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">Dead Load</td>
+                <td style="text-align: center; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">Load Value</td>
+                <td style="text-align: center; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">Unit</td>
+                <td style="text-align: center; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">Location</td>
+                <td style="font-weight: bold; background-color: #f9f9f9; text-align: left; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">Seismic Code</td>
+                <td style="text-align: center; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">IS 1893 (Part 4) : 2015</td>
+                <td style="font-weight: bold; background-color: #f9f9f9; text-align: left; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">Wind Code</td>
+                <td style="text-align: center; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">IS 875 (Part 3) : 2015</td>
+            </tr>
+            <tr>
+                <td style="font-weight: bold; background-color: #f9f9f9; text-align: left; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">Live Load</td>
+                <td style="text-align: center; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">-</td>
+                <td style="text-align: center; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">-</td>
+                <td style="text-align: center; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">-</td>
+                <td style="font-weight: bold; background-color: #f9f9f9; text-align: left; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">Zone</td>
+                <td style="text-align: center; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">as per code</td>
+                <td style="font-weight: bold; background-color: #f9f9f9; text-align: left; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">Wind speed</td>
+                <td style="text-align: center; padding: 6px 8px; border: 1px solid #000; font-size: 9px;">39</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <div class="footer">
+        <p>Generated on {{ generated_date }}</p>
+    </div>
+</body>
+</html>
