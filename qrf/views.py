@@ -5,98 +5,229 @@ from django.db import IntegrityError, transaction
 
 from utils.response import error_response, success_response
 from .models import QRF
-from .serializers import QRFSerializer, QRFListSerializer, QRFCompleteSerializer
+from .serializers import (
+    QRFSerializer, 
+    QRFListSerializer, 
+    QRFCompleteSerializer,
+    QRFCompleteUpdateSerializer
+)
 from .utils import initialize_qrf_dependencies
 
 
 class QRFCreateView(APIView):
+    """
+    POST /api/qrf/create/
+    
+    Creates a new QRF with auto-generated QRF number.
+    Optionally accepts nested data for all related tables.
+    If no nested data provided, initializes with default templates.
+    
+    Request body:
+    {
+        "client_name": "ABC Corp",
+        "consultant_name": "XYZ Consultants",
+        "sales_engineer": "uuid",
+        "sales_region": "uuid",
+        "job_site": "Mumbai",
+        "design_code": "IS 800",
+        "serviceability_code": "IS 875",
+        "building_units": [...],  // optional
+        "min_thickness_criteria": [...],  // optional
+        // ... other nested data
+    }
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        payload = request.data
         user = request.user
+        payload = request.data.copy()
 
-        # ✅ Safely generate unique QRF number
         try:
             with transaction.atomic():
+                # Generate unique QRF number
                 qrf_no = QRF.generate_unique_qrf_no()
+                payload["qrf_no"] = qrf_no
+                payload["status"] = payload.get("status", "DRAFT")
+
+                # Check if nested data is provided
+                has_nested_data = any(
+                    key in payload for key in [
+                        "building_units", "min_thickness_criteria", "secondary_details",
+                        "base_conditions", "bracing_conditions", "gravity_loadings",
+                        "seismic_loadings", "wind_loadings", "additional",
+                        "sheeting_details", "canopies", "framed_openings",
+                        "mezzanines", "cranes", "fascias", "partition_walls",
+                        "roof_monitors", "louvers", "safety_life_line_systems",
+                        "cage_ladders", "pipe_rack_trays"
+                    ]
+                )
+
+                if has_nested_data:
+                    # Create with provided nested data
+                    serializer = QRFCompleteUpdateSerializer(data=payload)
+                    serializer.is_valid(raise_exception=True)
+                    qrf = serializer.save(created_by=user, updated_by=user)
+                else:
+                    # Create basic QRF and initialize with defaults
+                    serializer = QRFSerializer(data=payload)
+                    serializer.is_valid(raise_exception=True)
+                    qrf = serializer.save(created_by=user, updated_by=user)
+                    initialize_qrf_dependencies(qrf)
+
+                # Return complete data
+                response_serializer = QRFCompleteSerializer(qrf)
+                return success_response(
+                    message="QRF created successfully.",
+                    data=response_serializer.data,
+                    status_code=status.HTTP_201_CREATED
+                )
+
+        except IntegrityError as e:
+            return error_response(
+                message="Failed to create QRF due to data conflict.",
+                data={"detail": str(e)},
+                status_code=status.HTTP_409_CONFLICT
+            )
         except Exception as e:
-            return error_response(message="Failed to generate unique QRF number.", status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return error_response(
+                message="Failed to create QRF.",
+                data={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        # ✅ Build QRF data
-        serializer = QRFSerializer(data={
-            "qrf_no": qrf_no,
-            "client_name": payload.get("client_name"),
-            "consultant_name": payload.get("consultant_name"),
-            "sales_engineer": payload.get("sales_engineer"),
-            "sales_region": payload.get("sales_region"),
-            "job_site": payload.get("job_site"),
-            "design_code": payload.get("design_code"),
-            "serviceability_code": payload.get("serviceability_code"),
-            "status": "DRAFT",
-        })
-        serializer.is_valid(raise_exception=True)
-
-        # ✅ Save safely (retry if IntegrityError due to duplicate qrf_no)
-        try:
-            qrf = serializer.save(created_by=user, updated_by=user)
-        except IntegrityError:
-            qrf_no = QRF.generate_unique_qrf_no()  # regenerate and retry once
-            serializer.validated_data["qrf_no"] = qrf_no
-            qrf = serializer.save(created_by=user, updated_by=user)
-
-        # ✅ Initialize all related default dependencies
-        initialize_qrf_dependencies(qrf)
-
-        # ✅ Return the newly created record
-        return success_response(message="QRF created successfully.", data=QRFSerializer(qrf).data, status_code=status.HTTP_201_CREATED)
   
 class QRFListView(APIView):
+    """
+    GET /api/qrf/list/
+    
+    Returns list of all QRFs created by the authenticated user.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         qrf_list = QRF.objects.filter(created_by=request.user).order_by("-created_at")
         serializer = QRFListSerializer(qrf_list, many=True)
-        return success_response(message="QRF list fetched successfully.", data=serializer.data)
+        return success_response(
+            message="QRF list fetched successfully.",
+            data=serializer.data
+        )
 
 
 class QRFDetailView(APIView):
+    """
+    GET /api/qrf/get/<uuid:pk>/
+    
+    Returns complete QRF details with all nested data.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
         try:
             qrf = QRF.objects.get(pk=pk, created_by=request.user)
         except QRF.DoesNotExist:
-            return error_response(message="QRF not found.", status_code=status.HTTP_404_NOT_FOUND)
+            return error_response(
+                message="QRF not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
 
         serializer = QRFCompleteSerializer(qrf)
-        return success_response(message="QRF details fetched successfully.", data=serializer.data)
+        return success_response(
+            message="QRF details fetched successfully.",
+            data=serializer.data
+        )
 
 
 class QRFUpdateView(APIView):
+    """
+    PATCH /api/qrf/update/<uuid:pk>/
+    
+    Updates QRF with complete nested data support.
+    Handles create/update/delete of all related records.
+    
+    Request body can include:
+    - QRF header fields (client_name, status, etc.)
+    - Any nested arrays (building_units, min_thickness_criteria, etc.)
+    
+    For nested arrays:
+    - Include "id" to update existing records
+    - Omit "id" to create new records
+    - Records not included in payload will be deleted
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, pk):
         try:
             qrf = QRF.objects.get(pk=pk, created_by=request.user)
         except QRF.DoesNotExist:
-            return error_response(message="QRF not found.", status_code=status.HTTP_404_NOT_FOUND)
+            return error_response(
+                message="QRF not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
 
-        serializer = QRFSerializer(qrf, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(updated_by=request.user)
+        try:
+            with transaction.atomic():
+                serializer = QRFCompleteUpdateSerializer(
+                    qrf,
+                    data=request.data,
+                    partial=True
+                )
+                serializer.is_valid(raise_exception=True)
+                updated_qrf = serializer.save(updated_by=request.user)
 
-        return success_response(message="QRF updated successfully.", data=serializer.data)
+                # Return complete updated data
+                response_serializer = QRFCompleteSerializer(updated_qrf)
+                return success_response(
+                    message="QRF updated successfully.",
+                    data=response_serializer.data
+                )
+
+        except Exception as e:
+            return error_response(
+                message="Failed to update QRF.",
+                data={"detail": str(e)},
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class QRFDeleteView(APIView):
+    """
+    DELETE /api/qrf/delete/<uuid:pk>/
+    
+    Soft deletes a QRF (sets deleted_at and deleted_by).
+    To permanently delete, use force=true query parameter.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def delete(self, request, pk):
         try:
             qrf = QRF.objects.get(pk=pk, created_by=request.user)
-            qrf.delete()
         except QRF.DoesNotExist:
-            return error_response(message="QRF not found.", status_code=status.HTTP_404_NOT_FOUND)
+            return error_response(
+                message="QRF not found.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
 
-        return success_response(message="QRF deleted successfully.", data={})
+        force_delete = request.query_params.get("force", "false").lower() == "true"
+
+        try:
+            with transaction.atomic():
+                if force_delete:
+                    # Permanent delete
+                    qrf.delete()
+                    message = "QRF permanently deleted successfully."
+                else:
+                    # Soft delete
+                    from django.utils import timezone
+                    qrf.deleted_at = timezone.now()
+                    qrf.deleted_by = request.user
+                    qrf.save(update_fields=["deleted_at", "deleted_by"])
+                    message = "QRF deleted successfully."
+
+                return success_response(message=message, data={})
+
+        except Exception as e:
+            return error_response(
+                message="Failed to delete QRF.",
+                data={"detail": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

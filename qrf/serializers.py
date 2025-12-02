@@ -443,7 +443,8 @@ class QRFCompleteSerializer(serializers.ModelSerializer):
 
 class QRFCompleteUpdateSerializer(serializers.ModelSerializer):
     """
-    Used for PATCH /api/qrf/<id>/update-all/ — updates or inserts all related data.
+    Used for CREATE and UPDATE operations with full nested data support.
+    Handles all related tables intelligently.
     """
     building_units = QRFBuildingUnitSerializer(many=True, required=False)
     min_thickness_criteria = QRFMinThicknessCriteriaSerializer(many=True, required=False)
@@ -469,77 +470,49 @@ class QRFCompleteUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = QRF
-        fields = "__all__"
+        fields = [
+            "id", "qrf_no", "revision", "revision_date",
+            "client_name", "consultant_name", "sales_engineer", "sales_region",
+            "job_site", "status", "design_code", "serviceability_code",
+            "building_units", "min_thickness_criteria", "secondary_details",
+            "base_conditions", "bracing_conditions", "gravity_loadings",
+            "seismic_loadings", "wind_loadings", "additional", "sheeting_details",
+            "canopies", "framed_openings", "mezzanines", "cranes", "fascias",
+            "partition_walls", "roof_monitors", "louvers",
+            "safety_life_line_systems", "cage_ladders", "pipe_rack_trays"
+        ]
+        read_only_fields = ["id", "qrf_no"]
 
-    def update_nested(self, related_manager, items, unique_field="id"):
-        """Generic nested update for 1-level child models."""
-        existing_objs = {str(obj.id): obj for obj in related_manager.all()}
-        updated_ids = []
-
-        for item in items:
-            item_id = str(item.get(unique_field)) if item.get(unique_field) else None
-            if item_id and item_id in existing_objs:
-                obj = existing_objs[item_id]
-                for k, v in item.items():
-                    if k not in ["id", "qrf", "building_unit", "parameters"]:
-                        setattr(obj, k, v)
-                obj.save()
-                updated_ids.append(item_id)
-            else:
-                related_manager.model.objects.create(qrf=self.instance, **item)
-
-        for obj_id, obj in existing_objs.items():
-            if obj_id not in updated_ids:
-                obj.delete()
-
-    def update_building_units(self, instance, units_data):
-        """Special nested logic for building_units → parameters"""
-        existing_units = {str(u.id): u for u in instance.building_units.all()}
-        updated_unit_ids = []
-
-        for unit in units_data:
-            unit_id = str(unit.get("id")) if unit.get("id") else None
-            parameters = unit.pop("parameters", [])
-
-            if unit_id and unit_id in existing_units:
-                unit_obj = existing_units[unit_id]
-                for k, v in unit.items():
-                    setattr(unit_obj, k, v)
-                unit_obj.save()
-                updated_unit_ids.append(unit_id)
-            else:
-                unit_obj = QRFBuildingUnit.objects.create(qrf=instance, **unit)
-                updated_unit_ids.append(str(unit_obj.id))
-
-            # Update parameters for this unit
-            existing_params = {str(p.id): p for p in unit_obj.parameters.all()}
-            updated_param_ids = []
-
-            for param in parameters:
-                param_id = str(param.get("id")) if param.get("id") else None
-                if param_id and param_id in existing_params:
-                    param_obj = existing_params[param_id]
-                    for k, v in param.items():
-                        if k not in ["id", "building_unit"]:
-                            setattr(param_obj, k, v)
-                    param_obj.save()
-                    updated_param_ids.append(param_id)
-                else:
-                    QRFBuildingParameter.objects.create(building_unit=unit_obj, **param)
-                    updated_param_ids.append(param_id)
-
-            # Delete removed parameters
-            for pid, pobj in existing_params.items():
-                if pid not in updated_param_ids and pid:
-                    pobj.delete()
-
-        # Delete removed units
-        for uid, uobj in existing_units.items():
-            if uid not in updated_unit_ids:
-                uobj.delete()
+    def create(self, validated_data):
+        """Create QRF with all nested data"""
+        # Extract nested data
+        nested_data = self._extract_nested_data(validated_data)
+        
+        # Create QRF instance
+        qrf = QRF.objects.create(**validated_data)
+        
+        # Create all nested records
+        self._create_nested_data(qrf, nested_data)
+        
+        return qrf
 
     def update(self, instance, validated_data):
-        # Non-nested field updates
+        """Update QRF with all nested data"""
+        # Extract nested data
+        nested_data = self._extract_nested_data(validated_data)
+        
+        # Update QRF fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Update nested data
+        self._update_nested_data(instance, nested_data)
+        
+        return instance
+
+    def _extract_nested_data(self, validated_data):
+        """Extract all nested data from validated_data"""
         nested_fields = [
             "building_units", "min_thickness_criteria", "secondary_details",
             "base_conditions", "bracing_conditions", "gravity_loadings",
@@ -548,20 +521,173 @@ class QRFCompleteUpdateSerializer(serializers.ModelSerializer):
             "partition_walls", "roof_monitors", "louvers",
             "safety_life_line_systems", "cage_ladders", "pipe_rack_trays"
         ]
-
-        for attr, value in validated_data.items():
-            if attr not in nested_fields:
-                setattr(instance, attr, value)
-        instance.save()
-
-        # Handle building_units separately
-        if "building_units" in validated_data:
-            self.update_building_units(instance, validated_data["building_units"])
-
-        # Handle all other nested tables
+        
+        nested_data = {}
         for field in nested_fields:
-            if field in validated_data and field != "building_units":
-                related_manager = getattr(instance, field)
-                self.update_nested(related_manager, validated_data[field])
+            if field in validated_data:
+                nested_data[field] = validated_data.pop(field)
+        
+        return nested_data
 
-        return instance
+    def _create_nested_data(self, qrf, nested_data):
+        """Create all nested records for a new QRF"""
+        # Handle building_units separately (has nested parameters)
+        if "building_units" in nested_data:
+            for unit_data in nested_data["building_units"]:
+                parameters_data = unit_data.pop("parameters", [])
+                unit = QRFBuildingUnit.objects.create(qrf=qrf, **unit_data)
+                for param_data in parameters_data:
+                    QRFBuildingParameter.objects.create(building_unit=unit, **param_data)
+        
+        # Handle all other nested tables
+        nested_models = {
+            "min_thickness_criteria": QRFMinThicknessCriteria,
+            "secondary_details": QRFSecondaryDetails,
+            "base_conditions": QRFBaseCondition,
+            "bracing_conditions": QRFBracingCondition,
+            "gravity_loadings": QRFGravityLoading,
+            "seismic_loadings": QRFSeismicLoading,
+            "wind_loadings": QRFWindLoading,
+            "additional": QRFBuildingAddition,
+            "sheeting_details": QRFSheetingDetail,
+            "canopies": QRFCanopy,
+            "framed_openings": QRFFramedOpening,
+            "mezzanines": QRFMezzanine,
+            "cranes": QRFCrane,
+            "fascias": QRFFascia,
+            "partition_walls": QRFPartitionWall,
+            "roof_monitors": QRFRoofMonitor,
+            "louvers": QRFLouver,
+            "safety_life_line_systems": QRFSafetyLifeLineSystem,
+            "cage_ladders": QRFCageLadder,
+            "pipe_rack_trays": QRFPipeRackCableTray,
+        }
+        
+        for field, model_class in nested_models.items():
+            if field in nested_data:
+                for item_data in nested_data[field]:
+                    item_data.pop("id", None)  # Remove id if present
+                    item_data.pop("qrf", None)  # Remove qrf if present
+                    model_class.objects.create(qrf=qrf, **item_data)
+
+    def _update_nested_data(self, qrf, nested_data):
+        """Update all nested records for existing QRF"""
+        # Handle building_units separately
+        if "building_units" in nested_data:
+            self._update_building_units(qrf, nested_data["building_units"])
+        
+        # Handle all other nested tables
+        nested_managers = {
+            "min_thickness_criteria": qrf.min_thickness_criteria,
+            "secondary_details": qrf.secondary_details,
+            "base_conditions": qrf.base_conditions,
+            "bracing_conditions": qrf.bracing_conditions,
+            "gravity_loadings": qrf.gravity_loadings,
+            "seismic_loadings": qrf.seismic_loadings,
+            "wind_loadings": qrf.wind_loadings,
+            "additional": qrf.additional,
+            "sheeting_details": qrf.sheeting_details,
+            "canopies": qrf.canopies,
+            "framed_openings": qrf.framed_openings,
+            "mezzanines": qrf.mezzanines,
+            "cranes": qrf.cranes,
+            "fascias": qrf.fascias,
+            "partition_walls": qrf.partition_walls,
+            "roof_monitors": qrf.roof_monitors,
+            "louvers": qrf.louvers,
+            "safety_life_line_systems": qrf.safety_life_line_systems,
+            "cage_ladders": qrf.cage_ladders,
+            "pipe_rack_trays": qrf.pipe_rack_trays,
+        }
+        
+        for field, manager in nested_managers.items():
+            if field in nested_data:
+                self._update_simple_nested(manager, nested_data[field])
+
+    def _update_building_units(self, qrf, units_data):
+        """Update building units with nested parameters"""
+        existing_units = {str(u.id): u for u in qrf.building_units.all()}
+        updated_unit_ids = []
+
+        for unit_data in units_data:
+            unit_id = str(unit_data.get("id")) if unit_data.get("id") else None
+            parameters_data = unit_data.pop("parameters", [])
+
+            if unit_id and unit_id in existing_units:
+                # Update existing unit
+                unit_obj = existing_units[unit_id]
+                for k, v in unit_data.items():
+                    if k not in ["id", "qrf"]:
+                        setattr(unit_obj, k, v)
+                unit_obj.save()
+                updated_unit_ids.append(unit_id)
+            else:
+                # Create new unit
+                unit_data.pop("id", None)
+                unit_obj = QRFBuildingUnit.objects.create(qrf=qrf, **unit_data)
+                updated_unit_ids.append(str(unit_obj.id))
+
+            # Update parameters for this unit
+            self._update_parameters(unit_obj, parameters_data)
+
+        # Delete units not in the update
+        for uid, uobj in existing_units.items():
+            if uid not in updated_unit_ids:
+                uobj.delete()
+
+    def _update_parameters(self, building_unit, parameters_data):
+        """Update parameters for a building unit"""
+        existing_params = {str(p.id): p for p in building_unit.parameters.all()}
+        updated_param_ids = []
+
+        for param_data in parameters_data:
+            param_id = str(param_data.get("id")) if param_data.get("id") else None
+            
+            if param_id and param_id in existing_params:
+                # Update existing parameter
+                param_obj = existing_params[param_id]
+                for k, v in param_data.items():
+                    if k not in ["id", "building_unit"]:
+                        setattr(param_obj, k, v)
+                param_obj.save()
+                updated_param_ids.append(param_id)
+            else:
+                # Create new parameter
+                param_data.pop("id", None)
+                param_obj = QRFBuildingParameter.objects.create(
+                    building_unit=building_unit,
+                    **param_data
+                )
+                updated_param_ids.append(str(param_obj.id))
+
+        # Delete parameters not in the update
+        for pid, pobj in existing_params.items():
+            if pid not in updated_param_ids:
+                pobj.delete()
+
+    def _update_simple_nested(self, related_manager, items_data):
+        """Generic update for simple nested models (no further nesting)"""
+        existing_objs = {str(obj.id): obj for obj in related_manager.all()}
+        updated_ids = []
+
+        for item_data in items_data:
+            item_id = str(item_data.get("id")) if item_data.get("id") else None
+            
+            if item_id and item_id in existing_objs:
+                # Update existing
+                obj = existing_objs[item_id]
+                for k, v in item_data.items():
+                    if k not in ["id", "qrf"]:
+                        setattr(obj, k, v)
+                obj.save()
+                updated_ids.append(item_id)
+            else:
+                # Create new
+                item_data.pop("id", None)
+                item_data.pop("qrf", None)
+                related_manager.create(**item_data)
+
+        # Delete objects not in the update
+        for obj_id, obj in existing_objs.items():
+            if obj_id not in updated_ids:
+                obj.delete()
