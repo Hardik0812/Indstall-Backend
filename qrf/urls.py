@@ -5,6 +5,7 @@ from .views import (
     QRFDetailView,
     QRFUpdateView,
     QRFDeleteView,
+    QRFGeneratePDFView,
 )
 
 urlpatterns = [
@@ -13,4 +14,5 @@ urlpatterns = [
     path("get/<uuid:pk>/", QRFDetailView.as_view(), name="qrf-get"),
     path("update/<uuid:pk>/", QRFUpdateView.as_view(), name="qrf-update"),
     path("delete/<uuid:pk>/", QRFDeleteView.as_view(), name="qrf-delete"),
+    path("generate-pdf/<uuid:pk>/", QRFGeneratePDFView.as_view(), name="qrf-generate-pdf"),
 ]

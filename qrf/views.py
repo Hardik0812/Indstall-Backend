@@ -2,6 +2,12 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.db import IntegrityError, transaction
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from django.utils import timezone
+from django.conf import settings
+from weasyprint import HTML
+import os
 
 from utils.response import error_response, success_response
 from .models import QRF
@@ -231,3 +237,52 @@ class QRFDeleteView(APIView):
                 data={"detail": str(e)},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        return success_response(message="QRF deleted successfully.", data={})
+
+
+class QRFGeneratePDFView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            qrf = QRF.objects.select_related('sales_engineer', 'sales_region').get(
+                pk=pk, 
+                created_by=request.user
+            )
+        except QRF.DoesNotExist:
+            return error_response(message="QRF not found.", status_code=status.HTTP_404_NOT_FOUND)
+
+        # Extract sales engineer name
+        sales_engineer_name = (
+            getattr(qrf.sales_engineer, "first_name", None) or 
+            getattr(qrf.sales_engineer, "full_name", None) or 
+            getattr(qrf.sales_engineer, "username", None) or 
+            "N/A"
+        )
+
+        # Extract sales region name
+        sales_region_name = getattr(qrf.sales_region, "name", None) or "N/A"
+
+        # Get logo path
+        logo_path = os.path.join(settings.BASE_DIR, "qrf", "static", "images", "indstaal_logo.png")
+
+        # Prepare context for template
+        context = {
+            "qrf": qrf,
+            "sales_engineer_name": sales_engineer_name,
+            "sales_region_name": sales_region_name,
+            "generated_date": timezone.now().strftime("%B %d, %Y %I:%M %p"),
+            "logo_path": logo_path,
+        }
+
+        # Render HTML template
+        html_string = render_to_string("qrf/pdf_template.html", context)
+
+        # Generate PDF using WeasyPrint
+        pdf_file = HTML(string=html_string, base_url=str(settings.BASE_DIR)).write_pdf()
+
+        # Return PDF as response
+        response = HttpResponse(pdf_file, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="QRF_{qrf.qrf_no}.pdf"'
+        
+        return response
